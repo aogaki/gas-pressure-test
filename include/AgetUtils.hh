@@ -7,13 +7,13 @@
 // AgetResponse.hh.
 
 // Command line of aget-shaper. The defaults are the settings of the mini-eTPC
-// run of 2026-09-02 (TODO/07); the gain is a placeholder until it is
-// calibrated against real data.
+// run of 2026-09-02 (TODO/07); the gain is the effective GEM gain calibrated
+// against the 241Am data of that run (TODO/08, 2026-09-07).
 struct AgetOptions {
   std::string input;        // -i, mandatory: the Stage 3 output
   double peakingNs = 223.;  // -t, AGET peaking time [ns]
   double rangeFC = 120.;    // -r, AGET gain range (full scale) [fC]
-  double gain = 1000.;      // -g, effective GEM gain
+  double gain = 3600.;      // -g, effective GEM gain (241Am, TODO/08)
   double pedestal = 450.;   // -p, pedestal [ADC counts]
   double noiseSigma = 6.;   // -s, noise sigma [ADC counts]
   long maxEvents = -1;      // -n, negative means "all events"

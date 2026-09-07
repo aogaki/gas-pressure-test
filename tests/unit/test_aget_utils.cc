@@ -194,7 +194,7 @@ TEST(ParseAgetOptionsTest, TheDefaultsAreTheRunOf20260902) {
   EXPECT_EQ(options.input, "in_readout.root");
   EXPECT_DOUBLE_EQ(options.peakingNs, 223.);
   EXPECT_DOUBLE_EQ(options.rangeFC, 120.);
-  EXPECT_DOUBLE_EQ(options.gain, 1000.);
+  EXPECT_DOUBLE_EQ(options.gain, 3600.);
   EXPECT_DOUBLE_EQ(options.pedestal, 450.);
   EXPECT_DOUBLE_EQ(options.noiseSigma, 6.);
   EXPECT_LT(options.maxEvents, 0);

@@ -83,7 +83,7 @@ graw2root.C が作る `raw` ツリーと同じにする。これで analyzeUVW.C
 aget-shaper -i <stage3_readout.root> [-t <peaking ns>] [-r <range fC>] [-g <gain>] [-p <pedestal>] [-s <noise sigma>] [-n <maxEvents>] [-h]
 ```
 
-- `-i` は必須。既定: `-t 223`、`-r 120`、`-g 1000` (仮。実データで較正する)、`-p 450`、`-s 6`
+- `-i` は必須。既定: `-t 223`、`-r 120`、`-g 3600` (run 2026-09-02 の 241Am データで較正。TODO/08 の「結果」節)、`-p 450`、`-s 6`
 - 入力に `waveforms` が無ければ終了コード 1
 - 乱数は固定シード (再現性)
 

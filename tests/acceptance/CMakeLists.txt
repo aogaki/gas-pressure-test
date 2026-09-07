@@ -500,14 +500,16 @@ set(TPCDAQ_MACROS ${PROJECT_SOURCE_DIR}/external/tpcdaq-macros)
 set(MAKE_CHANNEL_MAP ${PROJECT_SOURCE_DIR}/scripts/make_channel_map.py)
 
 # --- AT4-3 end to end, on the Stage 3 file of AT3-3 -------------------------
+# -g is pinned here (and in AT4-4 below): these tests check the shaper itself
+# at a known gain, not the calibrated default, which TODO/08 moved to 3600.
 add_test(NAME AT4-3_run
          COMMAND $<TARGET_FILE:aget-shaper>
-                 -i He_200mbar_0.3MeV_2000V_readout.root
+                 -i He_200mbar_0.3MeV_2000V_readout.root -g 1000
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s3_end2end)
 set_tests_properties(AT4-3_run PROPERTIES LABELS acceptance DEPENDS AT3-3_run)
 
-# The defaults of TODO/07: 223 ns peaking, 120 fC range, gain 1000, pedestal
-# 450, noise sigma 6. A pulse of more than 100 counts has to be there, and
+# The settings of TODO/07: 223 ns peaking, 120 fC range, gain 1000 (pinned on
+# the command line above), pedestal 450, noise sigma 6. A pulse of more than 100 counts has to be there, and
 # every pulse whose area is above 3000 counts (where the noise of the summed
 # cells is far below 5 %) has to carry the charge of Stage 3.
 set(AT4_3_CALL "check_raw.C(\"He_200mbar_0.3MeV_2000V_raw.root\",\"He_200mbar_0.3MeV_2000V_readout.root\",10,450,6,1000,120,223,100,3000)")
@@ -554,7 +556,7 @@ set_tests_properties(AT4-4_stage3 PROPERTIES LABELS acceptance
 
 add_test(NAME AT4-4_run
          COMMAND $<TARGET_FILE:aget-shaper>
-                 -i CO2_100mbar_2MeV_1200V_readout.root
+                 -i CO2_100mbar_2MeV_1200V_readout.root -g 1000
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s4_tracks)
 set_tests_properties(AT4-4_run PROPERTIES LABELS acceptance
                      DEPENDS AT4-4_stage3)

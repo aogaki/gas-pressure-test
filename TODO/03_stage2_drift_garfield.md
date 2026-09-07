@@ -58,7 +58,7 @@ drift-electrons -i <input.root> -v <volt> [-f <fraction>] [-n <maxEvents>] [-c <
 ```
 
 - `-i`, `-v` は必須。欠けていれば usage を stderr に出して終了コード 1
-- `-f` の既定は 1 (全電子)。0 < f ≤ 1
+- `-f` の既定は 1 (全電子)。0 < f ≤ 1。平均は不偏だが、セルあたりの分散は 1/f 倍になるので幅の比較には使えない
 - `-n` を指定するとその数のイベントだけ処理する (試運転用)
 - `-c` はガステーブルのキャッシュディレクトリ。既定 `gasfiles`。無ければ作る
 - 出力名は入力名の `.root` の前に `_{V}V` を付ける。数値は `%g`
@@ -76,7 +76,7 @@ ntuple `electrons` (1 行 = 底面に到達した電子 1 個)
 | x, y, z | D | 到達点 [mm]。y は -100 mm |
 | t | D | 到達時刻 [ns] |
 | weight | D | この電子が代表する電子数 (1/f) |
-| status | I | Garfield++ の終了コード |
+| status | I | Garfield++ の終了コード。−5 は読み出し面到達と側壁からの離脱の両方。区別は y 座標だけ |
 
 ntuple `run` (1 行): gas (S), pressure (D), voltage (D), efield (D) [V/cm], vdrift (D) [cm/us], dl (D), dt (D) [sqrt(cm)], w (D) [eV], fano (D)
 
@@ -104,6 +104,7 @@ Magboltz (Garfield++ 2025.12) を純ガス、200 mbar、293.15 K、ncoll = 2 で
 - 純 Ar は横拡散が大きく、10 cm で 1 cm 広がる。純 CO2 は冷たいガスで拡散は小さいがドリフトが遅い。混合ガスにすると中間になる
 - 200 mm ドリフトの時間は He 100 V/cm で約 29 µs、Ar 100 V/cm で約 58 µs、CO2 100 V/cm で約 55 µs
 - 電離電子数の目安: 5.5 MeV の α で He 1.3×10^5、Ar 2.1×10^5、CO2 1.7×10^5。300 keV なら He 7.3×10^3
+- Magboltz の W は電子用。α 用は He 42.7、CO2 34.2、Ar 26.4 eV (ICRU 31) で、He と CO2 の電子数は 3〜4 % 多い
 
 ## 受け入れテスト (案)
 

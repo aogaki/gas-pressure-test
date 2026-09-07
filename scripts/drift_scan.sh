@@ -49,56 +49,69 @@ case $cachedir in
   *) cachedir="$(pwd)/$cachedir" ;;
 esac
 
-mkdir -p "$outdir/logs"
-rm -f "$outdir/.failed"
+# The run wrapper below cds into outdir. A directory that cannot be entered has
+# to stop the script here, because from inside xargs the failure could not be
+# recorded: .failed lives in outdir.
+(CDPATH= cd "$outdir") || usage
+
+if [ "$dry_run" -eq 0 ]; then
+  mkdir -p "$outdir/logs"
+  rm -f "$outdir/.failed"
+fi
 
 # The inputs are the ROOT files of Stage 1, that is every *.root of outdir
 # except the outputs of the later stages: Stage 2 writes "_{V}V.root" (a digit
 # in front of the V, so that the "MeV" of a Stage 1 name is not mistaken for
-# one) and Stage 3 writes "_readout.root". In normal mode
-# each (input, voltage) pair is printed to stdout, building the run list
-# consumed by xargs below; in dry-run mode the would-be command goes to
-# stderr instead so stdout is not mixed into the run list.
-runlist=$(
+# one), Stage 3 "_readout.root", Stage 4 "_raw.root", and the analysis macros
+# of external/tpcdaq-macros "_uvw.root" and "_tracks.root".
+names=$(
   for file in "$outdir"/*.root; do
     [ -e "$file" ] || continue
     name=$(basename "$file" .root)
-    case $name in (*[0-9]V | *_readout) continue ;; esac
-    for v in $voltages; do
-      if [ "$dry_run" -eq 1 ]; then
-        echo "(cd $outdir && $exe -i $name.root -v $v -f $fraction" \
-             "-c $cachedir > logs/${name}_${v}V.log 2>&1)" >&2
-      else
-        echo "$name $v"
-      fi
-    done
+    case $name in
+      (*[0-9]V | *_readout | *_raw | *_uvw | *_tracks) continue ;;
+    esac
+    printf '%s\n' "$name"
   done
 )
 
-[ "$dry_run" -eq 1 ] && exit 0
+if [ -z "$names" ]; then
+  echo "drift_scan.sh: no Stage 1 ROOT file in $outdir" >&2
+  exit 0
+fi
 
-# Run every pair, up to $jobs at a time. Each run's stdout/stderr goes to its
-# own log; a run that fails records its name in outdir/.failed instead of
-# stopping the others (xargs's own exit status is not reliable across
-# implementations, so it is deliberately ignored here).
-if [ -n "$runlist" ]; then
-  printf '%s\n' "$runlist" | xargs -P "$jobs" -I{} sh -c '
+# One pass per voltage. The names go through xargs one per line (so that a
+# blank in a file name stays part of the name), the voltage is a fixed
+# argument of the wrapper. Each run's stdout/stderr goes to its own log; a run
+# that fails records its name in outdir/.failed instead of stopping the others
+# (xargs's own exit status is not reliable across implementations, so it is
+# deliberately ignored here).
+for v in $voltages; do
+  if [ "$dry_run" -eq 1 ]; then
+    printf '%s\n' "$names" | while IFS= read -r name; do
+      echo "(cd $outdir && $exe -i '$name.root' -v $v -f $fraction" \
+           "-c $cachedir > 'logs/${name}_${v}V.log' 2>&1)" >&2
+    done
+    continue
+  fi
+  printf '%s\n' "$names" | xargs -P "$jobs" -I{} sh -c '
+    name=$1
     exe=$2
     outdir=$3
     fraction=$4
     cachedir=$5
-    set -- $1
-    name=$1
-    v=$2
+    v=$6
     cd "$outdir" || exit 1
     if "$exe" -i "$name.root" -v "$v" -f "$fraction" -c "$cachedir" \
         >"logs/${name}_${v}V.log" 2>&1; then
       exit 0
     fi
     echo "${name}_${v}V" >> .failed
-  ' _ {} "$exe" "$outdir" "$fraction" "$cachedir" || true
-else
-  echo "drift_scan.sh: no Stage 1 ROOT file in $outdir" >&2
+  ' _ {} "$exe" "$outdir" "$fraction" "$cachedir" "$v" || true
+done
+
+if [ "$dry_run" -eq 1 ]; then
+  exit 0
 fi
 
 if [ -s "$outdir/.failed" ]; then

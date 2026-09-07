@@ -203,7 +203,7 @@ void check_raw(const char* rawFile, const char* readoutFile, int nEvents,
   AtCheckNear(pooledRms, noiseSigma, 0.05 * noiseSigma,
               "noise sigma of all channels pooled");
   // 8 sigma, not 5: the FPN channels carry pure noise, so the largest of the
-  // ~10000 cells of ten events crosses 5 sigma with probability 3.5 % (and
+  // ~80000 cells of ten events crosses 5 sigma with probability 3.5 % (and
   // 30 % over a hundred events). The smallest real pulse is pedestal + 100
   // counts = 16.7 sigma, so the looser limit judges just as well.
   AtCheck(highestFpn < pedestal + 8. * noiseSigma,

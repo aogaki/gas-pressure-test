@@ -7,3 +7,4 @@ gasfiles/
 *.gas
 geometry/*.csv
 external/tpcdaq-macros/channel_map.csv
+.claude/worktrees/

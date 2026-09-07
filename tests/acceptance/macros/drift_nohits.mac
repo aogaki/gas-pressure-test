@@ -1,0 +1,7 @@
+# AT2-1: a Stage 1 file without the hits ntuple, which Stage 2 must reject.
+/tpc/gas Ar
+/tpc/pressure 200
+/tpc/hits false
+/run/initialize
+/random/setSeeds 1 1
+/run/beamOn 1

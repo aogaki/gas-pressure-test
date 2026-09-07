@@ -3,3 +3,5 @@ build/
 .serena/
 .DS_Store
 scans/
+gasfiles/
+*.gas

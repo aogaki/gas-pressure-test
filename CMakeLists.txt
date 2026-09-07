@@ -37,6 +37,21 @@ target_link_libraries(gpt_core PUBLIC ${Geant4_LIBRARIES})
 add_executable(gas-pressure-test src/main.cc)
 target_link_libraries(gas-pressure-test PRIVATE gpt_core)
 
+# --- Stage 2: drift-electrons (Garfield++ and ROOT, no Geant4) --------------
+list(APPEND CMAKE_PREFIX_PATH /opt/Garfield /opt/ROOT)
+find_package(Garfield REQUIRED)
+find_package(ROOT REQUIRED COMPONENTS RIO Tree)
+
+# The pure helpers, so that the unit tests need neither Garfield++ nor ROOT.
+add_library(drift_util STATIC src/DriftUtils.cc)
+target_include_directories(drift_util PUBLIC ${PROJECT_SOURCE_DIR}/include)
+
+add_library(drift_core STATIC src/Drifter.cc)
+target_link_libraries(drift_core PUBLIC drift_util Garfield::Garfield)
+
+add_executable(drift-electrons src/drift_main.cc)
+target_link_libraries(drift-electrons PRIVATE drift_core ROOT::RIO ROOT::Tree)
+
 enable_testing()
 add_subdirectory(tests/unit)
 add_subdirectory(tests/acceptance)

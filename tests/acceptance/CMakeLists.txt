@@ -210,3 +210,85 @@ add_test(NAME AT-S4_missing_exe
                  ${SCAN_SH}
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/atS4)
 set_tests_properties(AT-S4_missing_exe PROPERTIES LABELS acceptance)
+
+# ============================================================================
+# Stage 2: drift-electrons (TODO/03)
+# ============================================================================
+
+# One Magboltz table for the whole stage. Making it takes about a minute, so
+# AT2-4 (the cache test) builds it and AT2-2 and AT2-3 read it back.
+set(S2_CACHE ${CMAKE_CURRENT_BINARY_DIR}/gascache)
+
+add_executable(drift_one_check drift_one_check.cc)
+target_link_libraries(drift_one_check PRIVATE drift_core ROOT::RIO ROOT::Tree)
+target_include_directories(drift_one_check PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+# --- AT2-1 CLI and output name ----------------------------------------------
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s2_cli)
+add_test(NAME AT2-1_no_input
+         COMMAND sh -c [=[! "$0" -v 2000]=] $<TARGET_FILE:drift-electrons>
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s2_cli)
+add_test(NAME AT2-1_no_voltage
+         COMMAND sh -c [=[! "$0" -i in.root]=] $<TARGET_FILE:drift-electrons>
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s2_cli)
+set_tests_properties(AT2-1_no_input AT2-1_no_voltage PROPERTIES LABELS acceptance)
+
+acceptance_run(AT2-1_nohits_run s2_nohits drift_nohits.mac)
+add_test(NAME AT2-1_no_hits
+         COMMAND sh -c
+                 [=[! "$0" -i Ar_200mbar_5.5MeV.root -v 2000 -c "$1" && test -z "$(ls *_2000V.root 2>/dev/null)"]=]
+                 $<TARGET_FILE:drift-electrons> ${S2_CACHE}
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s2_nohits)
+set_tests_properties(AT2-1_no_hits PROPERTIES LABELS acceptance
+                     DEPENDS AT2-1_nohits_run)
+
+# --- AT2-4 the gas table cache ----------------------------------------------
+# Runs twice on one event with almost no electrons: the first run makes the
+# table, the second one has to be much faster because it only reads it.
+acceptance_run(AT2-4_stage1 s2_cache drift_stage1.mac)
+add_test(NAME AT2-4_cache
+         COMMAND sh -c [=[
+set -e
+rm -rf "$1"
+start=$(date +%s)
+"$0" -i Ar_200mbar_5.5MeV.root -v 2000 -f 0.001 -n 1 -c "$1" > generate.log 2>&1
+middle=$(date +%s)
+"$0" -i Ar_200mbar_5.5MeV.root -v 2000 -f 0.001 -n 1 -c "$1" > reuse.log 2>&1
+end=$(date +%s)
+first=$((middle - start))
+second=$((end - middle))
+echo "first run ${first} s, second run ${second} s"
+test -f "$1/Ar_200mbar_100Vcm.gas"
+grep -q "running Magboltz" generate.log
+grep -q "reading the gas table" reuse.log
+! grep -q "running Magboltz" reuse.log
+test "$second" -lt "$first"
+]=]
+                 $<TARGET_FILE:drift-electrons> ${S2_CACHE}
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s2_cache)
+set_tests_properties(AT2-4_cache PROPERTIES LABELS acceptance
+                     DEPENDS AT2-4_stage1 TIMEOUT 900)
+
+add_test(NAME AT2-1_output_name
+         COMMAND sh -c [=[test -f Ar_200mbar_5.5MeV_2000V.root]=]
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s2_cache)
+set_tests_properties(AT2-1_output_name PROPERTIES LABELS acceptance
+                     DEPENDS AT2-4_cache)
+
+# --- AT2-2 one electron at a time -------------------------------------------
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s2_one)
+add_test(NAME AT2-2_drift COMMAND drift_one_check ${S2_CACHE}
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s2_one)
+set_tests_properties(AT2-2_drift PROPERTIES LABELS acceptance
+                     DEPENDS AT2-4_cache TIMEOUT 900)
+
+# --- AT2-3 end to end -------------------------------------------------------
+acceptance_run(AT2-3_stage1 s2_end2end drift_stage1.mac)
+add_test(NAME AT2-3_run
+         COMMAND $<TARGET_FILE:drift-electrons>
+                 -i Ar_200mbar_5.5MeV.root -v 2000 -f 0.1 -c ${S2_CACHE}
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s2_end2end)
+set_tests_properties(AT2-3_run PROPERTIES LABELS acceptance
+                     DEPENDS "AT2-3_stage1;AT2-4_cache" TIMEOUT 900)
+acceptance_check(AT2-3_check s2_end2end AT2-3_run
+                 [[check_drift.C("Ar_200mbar_5.5MeV_2000V.root","Ar",200,2000,10,0.9)]])

@@ -1,0 +1,7 @@
+# AT2-3: input for Stage 2. Ar at 200 mbar, 5.5 MeV, with the hits ntuple.
+/tpc/gas Ar
+/tpc/pressure 200
+/tpc/hits true
+/run/initialize
+/random/setSeeds 1 1
+/run/beamOn 10

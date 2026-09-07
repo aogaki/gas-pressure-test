@@ -27,6 +27,7 @@
 ## Stage 1 の材料
 
 - 密度: 理想気体の分圧の和。ρ(P) = (P / 1013.25) × Σ (f_i / 100) ρ_i,NIST
+- CO2 の ρ_NIST は実在気体 (1 atm) の値なので、これを圧力に線形にスケールすると理想気体より 0.68 % 大きい。低圧では理想気体に近づくため、この分だけ Stage 1 の密度が Stage 2 (Magboltz、理想気体) と食い違う (He, Ar は無視できる大きさ)
 - 単一ガスは今まで通り `BuildMaterialWithNewDensity` (base material 経由で ASTAR が使われる)
 - 混合ガスは `new G4Material(name, density, ncomponents, kStateGas, 293.15 K, P)` に NIST 材料を `AddMaterial(nist_i, w_i)` で加える。質量分率は w_i = f_i ρ_i,NIST / Σ f_j ρ_j,NIST (理想気体なので分子量の表は不要)
 - 材料名は `{gas}_{p}mbar` (今まで通り)。同じ名前で 2 回作らない
@@ -43,6 +44,7 @@
 
 - `run.gas` を解析して `MediumMagboltz::SetComposition(name1, f1, name2, f2, ...)` に渡す。Magboltz の名前は he, ar, co2
 - W と Fano は Magboltz の値をそのまま使う (He-90-CO2-10 で W = 40.47 eV, Fano = 0.185 を確認済み)
+- Magboltz の W と Fano は成分の体積分率の線形平均で、W_mix = Σ (f_i / 100) W_i, Fano_mix = Σ (f_i / 100) Fano_i。He-90-CO2-10 の 40.47 eV は 0.9 × 41.3 + 0.1 × 33.0、0.185 は 0.9 × 0.17 + 0.1 × 0.32 の内訳。エネルギー分配 (CO2 の阻止能が大きい分だけ CO2 側に多く落ちる) と Penning (Jesse) 効果を含まないので、He 混合の電離電子数はこの W から出した値が下限になる (実際はもっと多い)
 - キャッシュ名 `{gas}_{p}mbar_{E}Vcm.gas` はそのまま (ダッシュ入り)
 - ガステーブルの書き込みは一時ファイルに書いてから rename する (並列実行で同じテーブルを同時に作っても壊れないように)
 

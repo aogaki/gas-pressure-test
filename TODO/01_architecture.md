@@ -11,7 +11,7 @@ mini TPC に適したガス圧 (と将来的に電圧) を決めるためのデ�
 
 想定する圧力の上限は 200 mbar。下限は未定。
 He は 300 keV の α を検出エリア内で止めることが目的なので低圧側を使う。
-検出エリアはガスボリューム全体 (200 mm × 200 mm × 500 mm)。「検出エリア内で止まる」は exited = 0 と同じ意味。
+検出エリアはガスボリューム全体 (200 mm × 200 mm × 500 mm)。「検出エリア内で止まる」は exited = 0 と同じ意味。(2026-09-07 追記: TODO/06 以降、判定はパッド面 107.5 × 106.5 mm。`range_summary.C` の zMaxMm/xMaxMm)
 
 ## パイプライン
 
@@ -59,7 +59,7 @@ Stage 2 は Geant4 ではないので普通の CLI (`-i 入力 -v 電圧`) に�
 |---|---|---|---|
 | `/tpc/gas` | ガス指定 (下の「ガス」節) | Ar | `/run/initialize` より前 |
 | `/tpc/pressure` | 数値 [mbar] (単位は付けない) | 1013.25 | `/run/initialize` より前 |
-| `/tpc/hits` | true, false | false | `/run/beamOn` より前 |
+| `/tpc/hits` | true, false | false | `/run/initialize` より前 |
 | `/analysis/setFileName` | `.root` まで書いた名前 | 自動命名 | Geant4 組み込み。名前にドットがあると Geant4 が最後のドット以降を拡張子と誤認して落ちるので `.root` を付ける。付け忘れはアプリが補う |
 | `/gps/...` | GPS の全コマンド | alpha, 5.5 MeV, (0, 0, -250 mm), 方向 +z | Geant4 組み込み |
 | `/random/setSeeds` | 整数 2 つ | Geant4 既定 | 再現性が要るなら必ず書く |
@@ -100,7 +100,7 @@ MT は使わない。プロセスは互いに独立なので、マクロを変�
 - z: α 線源軸。入射面は z = -250 mm、α は +z に進む。実機の基板図では −y_det に相当し、加速器のビーム軸 (+x_det) は sim の +x に対応する (TODO/06)。「ビーム軸」とは呼ばない
 - y: 鉛直 = ドリフト方向。読み出し面 (底) は y = -100 mm、カソードは y = +100 mm。ドリフト長は最大 200 mm
 - x: 水平
-- 一次 α の既定: 位置 (0, 0, -250 mm)、方向 +z、t = 0。マクロの `/gps/` で変更できる
+- 一次 α の既定: 位置 (0, 0, -250 mm)、方向 +z、t = 0。マクロの `/gps/` で変更できる。線源は入射面上にあるので、−z 向きの α はガスに入らず、exited = 1、eExit = e0、終点 = 入射点で記録される
 
 ## 単位
 
@@ -109,6 +109,7 @@ MT は使わない。プロセスは互いに独立なので、マクロを変�
 - ROOT 出力: Geant4 の内部単位のまま。長さ mm、時間 ns、エネルギー MeV
 - 温度は 20 °C (293.15 K) 固定
 - 密度: ρ(P) = ρ_NIST × P / 1013.25 mbar (理想気体)。Geant4 の NIST ガス密度は 20 °C, 1 atm の値
+- CO2 の ρ_NIST は実在気体の値 (0.68 % だけ理想気体より大きい) なので、低圧では Stage 2 (Magboltz、理想気体) の密度とわずかに食い違う (TODO/05)
 
 ## ガス
 
@@ -165,8 +166,8 @@ ntuple `hits` (1 行 = ガス内でエネルギー付与のあった 1 ステッ
 | eventID | I | イベント番号 |
 | trackID | I | Geant4 の track ID (一次 α は 1) |
 | pdg | I | PDG コード。α = 1000020040、e- = 11 |
-| x, y, z | D | ステップ終点 [mm] |
-| t | D | ステップ終点の global time [ns] |
+| x, y, z | D | ステップの中点 [mm] |
+| t | D | ステップの中点の global time [ns] |
 | edep | D | このステップのエネルギー付与 [MeV] |
 | stepLength | D | ステップ長 [mm] |
 
@@ -180,7 +181,7 @@ ntuple `run` (1 行だけ。Stage 2 がガスと圧力を知るため)
 | pressure | D | `/tpc/pressure` の値 [mbar] |
 | hits | I | `/tpc/hits` の値 (0/1) |
 
-`run` は `/run/beamOn` ごとに 1 行書かれる。1 マクロにつき `/run/beamOn` は 1 回だけにする (複数回書くと `events` も混ざる)。
+`run` は `/run/beamOn` ごとに 1 行書かれる。1 マクロにつき `/run/beamOn` は 1 回。2 回目は FatalException で止まる。
 
 ## 物理
 

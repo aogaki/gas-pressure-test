@@ -178,3 +178,35 @@ TEST(SampleDriftedCountTest, RandomRoundingIsUnbiased) {
   // 7 * 0.1 = 0.7, so plain rounding would give 1 every time.
   EXPECT_NEAR(static_cast<double>(sum) / n, 0.7, 0.02);
 }
+
+// --- AT-M1: gas mixtures reach Magboltz -------------------------------------
+
+TEST(MagboltzCompositionTest, SingleGasFillsOneSlot) {
+  const MagboltzMix mix = MagboltzComposition("Ar");
+  EXPECT_EQ(mix.names[0], "ar");
+  EXPECT_DOUBLE_EQ(mix.fractions[0], 100.);
+  for (int i = 1; i < MagboltzMix::kMaxComponents; ++i) {
+    EXPECT_TRUE(mix.names[i].empty());
+    EXPECT_DOUBLE_EQ(mix.fractions[i], 0.);
+  }
+}
+
+TEST(MagboltzCompositionTest, MixtureKeepsOrderAndPercentages) {
+  const MagboltzMix mix = MagboltzComposition("He-90-CO2-10");
+  EXPECT_EQ(mix.names[0], "he");
+  EXPECT_DOUBLE_EQ(mix.fractions[0], 90.);
+  EXPECT_EQ(mix.names[1], "co2");
+  EXPECT_DOUBLE_EQ(mix.fractions[1], 10.);
+  EXPECT_TRUE(mix.names[2].empty());
+  EXPECT_DOUBLE_EQ(mix.fractions[2], 0.);
+}
+
+TEST(MagboltzCompositionTest, BadSpecificationThrows) {
+  EXPECT_THROW(MagboltzComposition("Xe-100"), std::invalid_argument);
+  EXPECT_THROW(MagboltzComposition("He-90-CO2-20"), std::invalid_argument);
+}
+
+TEST(GasFileNameTest, MixtureNamesAreUsedAsTheyAre) {
+  EXPECT_EQ(GasFileName("gasfiles", "He-90-CO2-10", 200., 100.),
+            "gasfiles/He-90-CO2-10_200mbar_100Vcm.gas");
+}

@@ -48,7 +48,7 @@ Stage 2 は Geant4 ではないので普通の CLI (`-i 入力 -v 電圧`) に�
 
 | コマンド | 引数 | 既定値 | 制約 |
 |---|---|---|---|
-| `/tpc/gas` | He, Ar, CO2 | Ar | `/run/initialize` より前 |
+| `/tpc/gas` | ガス指定 (下の「ガス」節) | Ar | `/run/initialize` より前 |
 | `/tpc/pressure` | 数値 [mbar] (単位は付けない) | 1013.25 | `/run/initialize` より前 |
 | `/tpc/hits` | true, false | false | `/run/beamOn` より前 |
 | `/analysis/setFileName` | `.root` まで書いた名前 | 自動命名 | Geant4 組み込み。名前にドットがあると Geant4 が最後のドット以降を拡張子と誤認して落ちるので `.root` を付ける。付け忘れはアプリが補う |
@@ -82,7 +82,7 @@ MT は使わない。プロセスは互いに独立なので、マクロを変�
 
 - world: 1 m 立方の真空 (G4_Galactic)
 - ガスボリューム: 200 mm × 200 mm × 500 mm の直方体。中心を原点に置く
-- z: ビーム軸。入射面は z = -250 mm、α は +z に進む
+- z: α 線源軸。入射面は z = -250 mm、α は +z に進む。実機の基板図では −y_det に相当し、加速器のビーム軸 (+x_det) は sim の +x に対応する (TODO/06)。「ビーム軸」とは呼ばない
 - y: 鉛直 = ドリフト方向。読み出し面 (底) は y = -100 mm、カソードは y = +100 mm。ドリフト長は最大 200 mm
 - x: 水平
 - 一次 α の既定: 位置 (0, 0, -250 mm)、方向 +z、t = 0。マクロの `/gps/` で変更できる
@@ -97,14 +97,30 @@ MT は使わない。プロセスは互いに独立なので、マクロを変�
 
 ## ガス
 
-| `/tpc/gas` | Geant4 NIST 名 | ρ_NIST [g/cm3] |
-|---|---|---|
-| He | G4_He | 1.66322e-4 |
-| Ar | G4_Ar | 1.66201e-3 |
-| CO2 | G4_CARBON_DIOXIDE | 1.84212e-3 |
+成分は次の 3 つ。
 
-- 材料は `G4NistManager::BuildMaterialWithNewDensity` で NIST 材料を base material にして作る。α の阻止能モデル (G4BraggIonModel) は ASTAR データを材料の同一性で引くため、base material 経由で参照されることを受け入れテストで確認する
-- 将来の混合ガス (He/CO2 など) に備え、ガス名は文字列のまま両段階で解釈する。今は単一ガスのみ
+| 成分名 | Geant4 NIST 名 | Magboltz 名 | ρ_NIST [g/cm3] |
+|---|---|---|---|
+| He | G4_He | he | 1.66322e-4 |
+| Ar | G4_Ar | ar | 1.66201e-3 |
+| CO2 | G4_CARBON_DIOXIDE | co2 | 1.84212e-3 |
+
+### ガス指定の書式 (TODO/05)
+
+`名前-割合-名前-割合...`。例: `He-90-CO2-10`, `Ar-90-CO2-10`, `He-92.5-CO2-7.5`。
+
+- 割合は体積 (モル) パーセント。合計は 100、各割合は 0 より大きい。小数も可
+- 成分は 1 から 6 個 (Magboltz の上限)。単一ガスは `He` と書ける (`He-100` と同じ)
+- 順序はそのまま名前に使う (正規化しない)
+- この文字列を `/tpc/gas`、ファイル名、`run.gas`、Stage 2 の組成、ガステーブルのキャッシュ名すべてで使う。区切りにコロンやスラッシュを使わないのは、ROOT のファイル名と Unix のパスで安全にするため
+- 解析は `ParseGasSpec`(`include/GasProperties.hh`) 1 か所。Geant4 非依存なので Stage 1 (gpt_core) と Stage 2 (drift_util) の両方でコンパイルする
+
+### 密度と材料
+
+- 密度は理想気体の分圧の和: ρ(P) = (P / 1013.25) × Σ (f_i / 100) ρ_i,NIST
+- 単一ガスは `G4NistManager::BuildMaterialWithNewDensity` で NIST 材料を base material にして作る。α の阻止能モデル (G4BraggIonModel) は ASTAR データを材料の同一性で引くため、base material 経由で参照されることを受け入れテストで確認する
+- 混合ガスは `new G4Material(name, density, ncomponents, kStateGas, 293.15 K, P)` に NIST 材料を `AddMaterial(nist_i, w_i)` で加える。質量分率は w_i = f_i ρ_i,NIST / Σ f_j ρ_j,NIST (理想気体なので分子量の表は不要)。base material が無いので阻止能は Geant4 の元素ベースの計算になる。ASTAR の飛程加法則 1/R = Σ w_i / R_i と 5.5 MeV で 1〜3 % 一致する (AT-M2)
+- 材料名はどちらも `{gas}_{p}mbar`。同じ名前で 2 回作らない
 
 ## ROOT 出力の構造 (Stage 1)
 

@@ -8,6 +8,9 @@
 #include <cstdlib>
 #include <map>
 #include <stdexcept>
+#include <vector>
+
+#include "GasProperties.hh"
 
 namespace {
 
@@ -129,6 +132,16 @@ std::string MagboltzGasName(const std::string& gas) {
     throw std::invalid_argument("unknown gas: " + gas);
   }
   return it->second;
+}
+
+MagboltzMix MagboltzComposition(const std::string& gasSpec) {
+  MagboltzMix mix;
+  const std::vector<GasComponent> components = ParseGasSpec(gasSpec);
+  for (std::size_t i = 0; i < components.size(); ++i) {
+    mix.names[i] = MagboltzGasName(components[i].name);
+    mix.fractions[i] = components[i].fraction;
+  }
+  return mix;
 }
 
 std::string GasFileName(const std::string& cacheDir, const std::string& gas,

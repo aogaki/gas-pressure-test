@@ -10,8 +10,13 @@
 // ntuple with their status, but only those on the readout plane are counted
 // for the arrival time. The alpha starts 1 mm away from the z = -250 mm face,
 // so a few percent of the electrons of the first hits diffuse into it.
+//
+// expW and expFano, when positive, are the Magboltz W [eV] and Fano factor
+// expected of the gas (AT-M3); the tolerances are relative.
 void check_drift(const char* fileName, const char* gas, double pressureMbar,
-                 double voltage, int nEvents, double minReached) {
+                 double voltage, int nEvents, double minReached,
+                 double expW = 0., double expWTolPercent = 0.,
+                 double expFano = 0., double expFanoTolPercent = 0.) {
   TFile* file = AtOpen(fileName);
 
   TTree* run = AtTree(file, "run");
@@ -38,6 +43,13 @@ void check_drift(const char* fileName, const char* gas, double pressureMbar,
   AtCheck(vdrift > 0. && dt > 0. && w > 0. && fano > 0.,
           Form("run transport parameters: vdrift = %g cm/us, dl = %g, dt = %g,"
                " W = %g eV, Fano = %g", vdrift, dl, dt, w, fano));
+  if (expW > 0.) {
+    AtCheckNear(w, expW, expW * expWTolPercent / 100., "run.w [eV]");
+  }
+  if (expFano > 0.) {
+    AtCheckNear(fano, expFano, expFano * expFanoTolPercent / 100.,
+                "run.fano");
+  }
 
   // The events of Stage 1 have been copied over.
   TTree* events = AtTree(file, "events");

@@ -6,7 +6,8 @@ set -eu
 
 usage() {
   echo 'usage: scan.sh -o <outdir> [-g "He Ar CO2"] [-p "50 100 150 200"]' >&2
-  echo '                [-e "0.3 0.5 1 ... 10"] [-n 1000000] [-j 14] [-x <exe>] [-d]' >&2
+  echo '                [-e "0.3 0.5 1 ... 10"] [-n 1000000] [-j 14] [-x <exe>] [-H] [-d]' >&2
+  echo '  -H  write the hits ntuple (/tpc/hits true), for Stage 2 input' >&2
   exit 1
 }
 
@@ -20,9 +21,10 @@ energies="0.3 0.5 1 1.5 2 2.5 3 3.5 4 4.5 5 5.5 6 6.5 7 7.5 8 8.5 9 9.5 10"
 nevents=1000000
 jobs=14
 exe="$project_root/build/gas-pressure-test"
+hits=false
 dry_run=0
 
-while getopts "o:g:p:e:n:j:x:d" opt; do
+while getopts "o:g:p:e:n:j:x:Hd" opt; do
   case $opt in
     o) outdir=$OPTARG ;;
     g) gases=$OPTARG ;;
@@ -31,6 +33,7 @@ while getopts "o:g:p:e:n:j:x:d" opt; do
     n) nevents=$OPTARG ;;
     j) jobs=$OPTARG ;;
     x) exe=$OPTARG ;;
+    H) hits=true ;;
     d) dry_run=1 ;;
     *) usage ;;
   esac
@@ -61,7 +64,7 @@ runlist=$(
         cat > "$outdir/macros/$name.mac" <<EOF
 /tpc/gas $gas
 /tpc/pressure $p
-/tpc/hits false
+/tpc/hits $hits
 /run/initialize
 /gps/energy $e MeV
 /analysis/setFileName $name.root

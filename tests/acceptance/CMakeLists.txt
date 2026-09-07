@@ -137,6 +137,18 @@ acceptance_run(AT-11_iso_run at11_iso at11_iso.mac)
 acceptance_check(AT-11_iso_check at11_iso AT-11_iso_run
                  [[check_gps_angle.C("Ar_200mbar_5.5MeV.root",0.98)]])
 
+# --- AT-M2 gas mixtures at 1013.25 mbar, 5.5 MeV (TODO/05) ------------------
+# Expectations from NIST ASTAR with the range additivity rule 1/R = sum(w_i/R_i)
+# applied to the mass ranges, both for the path length and for the projected
+# range. The automatic file name carries the mixture specification.
+acceptance_run(AT-M2_HeCO2_run atM2_HeCO2 atM2_HeCO2.mac)
+acceptance_check(AT-M2_HeCO2_check atM2_HeCO2 AT-M2_HeCO2_run
+                 [[check_range.C("He-90-CO2-10_1013.25mbar_5.5MeV.root",134.2,5,133.5,5,false)]])
+
+acceptance_run(AT-M2_ArCO2_run atM2_ArCO2 atM2_ArCO2.mac)
+acceptance_check(AT-M2_ArCO2_check atM2_ArCO2 AT-M2_ArCO2_run
+                 [[check_range.C("Ar-90-CO2-10_1013.25mbar_5.5MeV.root",42.4,5,41.7,5,false)]])
+
 # --- AT-S1 scan.sh dry run: macros are generated, nothing executes ---------
 set(SCAN_SH ${PROJECT_SOURCE_DIR}/scripts/scan.sh)
 set(RANGE_SUMMARY ${PROJECT_SOURCE_DIR}/scripts/range_summary.C)
@@ -292,3 +304,83 @@ set_tests_properties(AT2-3_run PROPERTIES LABELS acceptance
                      DEPENDS "AT2-3_stage1;AT2-4_cache" TIMEOUT 900)
 acceptance_check(AT2-3_check s2_end2end AT2-3_run
                  [[check_drift.C("Ar_200mbar_5.5MeV_2000V.root","Ar",200,2000,10,0.9)]])
+
+# --- AT-M3 a gas mixture all the way through Stage 2 (TODO/05) --------------
+# This adds a second Magboltz table (He/CO2 90/10) to the shared cache, which
+# takes about 90 s. It has to wait for AT2-4, which empties the cache
+# directory before it makes the argon table.
+acceptance_run(AT-M3_stage1 s2_mixture atM3_stage1.mac)
+add_test(NAME AT-M3_run
+         COMMAND $<TARGET_FILE:drift-electrons>
+                 -i He-90-CO2-10_200mbar_0.3MeV.root -v 2000 -f 0.1
+                 -c ${S2_CACHE}
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s2_mixture)
+set_tests_properties(AT-M3_run PROPERTIES LABELS acceptance
+                     DEPENDS "AT-M3_stage1;AT2-4_cache" TIMEOUT 900)
+acceptance_check(AT-M3_check s2_mixture AT-M3_run
+                 [[check_drift.C("He-90-CO2-10_200mbar_0.3MeV_2000V.root","He-90-CO2-10",200,2000,10,0.9,40.47,0.5,0.185,3)]])
+
+# --- AT-D1 scan.sh -H asks Stage 1 for the hits ntuple ----------------------
+# The "-H is missing" case is AT-S1, whose macros carry /tpc/hits false.
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/atD1)
+add_test(NAME AT-D1_run
+         COMMAND ${SCAN_SH} -H -d -o . -g "He" -p "200" -e "0.3" -n 10
+                 -x $<TARGET_FILE:gas-pressure-test>
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/atD1)
+add_test(NAME AT-D1_check
+         COMMAND sh -c [=[
+set -e
+diff - macros/He_200mbar_0.3MeV.mac <<'MAC'
+/tpc/gas He
+/tpc/pressure 200
+/tpc/hits true
+/run/initialize
+/gps/energy 0.3 MeV
+/analysis/setFileName He_200mbar_0.3MeV.root
+/random/setSeeds 1 1
+/run/beamOn 10
+MAC
+test -z "$(ls *.root 2>/dev/null)"
+]=]
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/atD1)
+set_tests_properties(AT-D1_run PROPERTIES LABELS acceptance)
+set_tests_properties(AT-D1_check PROPERTIES LABELS acceptance DEPENDS AT-D1_run)
+
+# --- AT-D2 drift_scan.sh ----------------------------------------------------
+set(DRIFT_SCAN_SH ${PROJECT_SOURCE_DIR}/scripts/drift_scan.sh)
+
+# Dry run: one command per (Stage 1 file, voltage), and nothing is executed.
+# The Stage 2 output of the run below is skipped because its name ends in "V".
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/atD2_dry)
+add_test(NAME AT-D2_dry
+         COMMAND sh -c [=[
+set -e
+rm -f ./*.root
+touch Ar_200mbar_5.5MeV.root Ar_200mbar_5.5MeV_1000V.root
+out=$("$0" -d -o . -v "1000 2000" -x /no/such/exe 2>&1 >/dev/null)
+printf '%s\n' "$out"
+# One "(cd . && ..." line per (Stage 1 file, voltage); the _1000V.root file
+# is a Stage 2 output and must not be picked up again.
+test "$(printf '%s\n' "$out" | grep -c '^(cd ')" = 2
+test "$(printf '%s\n' "$out" | grep -c -- '-v 2000')" = 1
+test ! -f Ar_200mbar_5.5MeV_2000V.root
+]=]
+                 ${DRIFT_SCAN_SH}
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/atD2_dry)
+set_tests_properties(AT-D2_dry PROPERTIES LABELS acceptance)
+
+# Real run on one Stage 1 file, reusing the argon table AT2-4 has cached.
+acceptance_run(AT-D2_stage1 atD2 drift_stage1.mac)
+add_test(NAME AT-D2_run
+         COMMAND ${DRIFT_SCAN_SH} -o . -v "2000" -f 0.01 -j 2 -c ${S2_CACHE}
+                 -x $<TARGET_FILE:drift-electrons>
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/atD2)
+set_tests_properties(AT-D2_run PROPERTIES LABELS acceptance
+                     DEPENDS "AT-D2_stage1;AT2-4_cache" TIMEOUT 900)
+acceptance_check(AT-D2_check atD2 AT-D2_run
+                 [[check_drift.C("Ar_200mbar_5.5MeV_2000V.root","Ar",200,2000,10,0.9)]])
+
+add_test(NAME AT-D2_log
+         COMMAND sh -c [=[test -s logs/Ar_200mbar_5.5MeV_2000V.log]=]
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/atD2)
+set_tests_properties(AT-D2_log PROPERTIES LABELS acceptance DEPENDS AT-D2_run)

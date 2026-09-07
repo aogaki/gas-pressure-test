@@ -47,3 +47,33 @@ TEST(GasMaterialTest, DifferentPressuresGiveDifferentMaterials) {
   EXPECT_NE(low, high);
   EXPECT_NEAR(high->GetDensity() / (g / cm3), 1.84212e-3, 1.84212e-3 * 1e-6);
 }
+
+// --- AT-M1: gas mixtures ---------------------------------------------------
+
+TEST(GasMaterialTest, BuildsHeCO2Mixture) {
+  G4Material* material = BuildGasMaterial("He-90-CO2-10", 200.);
+  ASSERT_NE(material, nullptr);
+  EXPECT_NEAR(material->GetDensity() / (g / cm3), 6.5907e-5, 6.5907e-5 * 1e-3);
+  EXPECT_EQ(material->GetState(), kStateGas);
+  // He, C and O.
+  EXPECT_EQ(material->GetNumberOfElements(), 3u);
+  EXPECT_EQ(material->GetName(), "He-90-CO2-10_200mbar");
+}
+
+TEST(GasMaterialTest, MixtureMassFractionsFollowThePartialDensities) {
+  G4Material* material = BuildGasMaterial("He-90-CO2-10", 1013.25);
+  ASSERT_NE(material, nullptr);
+  // w_He = 0.9 * rho_He / rho_mix, so helium carries 44.83 % of the mass.
+  const G4double* fractions = material->GetFractionVector();
+  G4double helium = 0.;
+  for (size_t i = 0; i < material->GetNumberOfElements(); ++i) {
+    if (material->GetElement(i)->GetZ() == 2.) helium = fractions[i];
+  }
+  EXPECT_NEAR(helium, 0.4483, 0.4483 * 1e-3);
+}
+
+TEST(GasMaterialTest, SameMixtureReusesTheSameMaterial) {
+  G4Material* first = BuildGasMaterial("Ar-90-CO2-10", 200.);
+  G4Material* second = BuildGasMaterial("Ar-90-CO2-10", 200.);
+  EXPECT_EQ(first, second);
+}

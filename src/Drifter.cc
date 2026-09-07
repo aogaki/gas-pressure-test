@@ -1,5 +1,7 @@
 #include "Drifter.hh"
 
+#include <unistd.h>
+
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
@@ -37,7 +39,11 @@ Drifter::Drifter(const std::string& gas, double pressureMbar, double fieldVcm,
       m_gasFile(GasFileName(cacheDir, gas, pressureMbar, fieldVcm)) {
   SeedGarfield();
 
-  m_medium.SetComposition(MagboltzGasName(gas), 100.);
+  const MagboltzMix mix = MagboltzComposition(gas);
+  m_medium.SetComposition(mix.names[0], mix.fractions[0], mix.names[1],
+                          mix.fractions[1], mix.names[2], mix.fractions[2],
+                          mix.names[3], mix.fractions[3], mix.names[4],
+                          mix.fractions[4], mix.names[5], mix.fractions[5]);
   m_medium.SetTemperature(kTemperatureK);
   m_medium.SetPressure(MbarToTorr(pressureMbar));
 
@@ -53,9 +59,14 @@ Drifter::Drifter(const std::string& gas, double pressureMbar, double fieldVcm,
                 gas.c_str(), pressureMbar, fieldVcm);
     m_medium.SetFieldGrid(fieldVcm, fieldVcm, 1, false);
     m_medium.GenerateGasTable(kMagboltzCollisions, false);
-    if (!m_medium.WriteGasFile(m_gasFile)) {
-      throw std::runtime_error("cannot write the gas table " + m_gasFile);
+    // Write to a private file and rename, so that two processes making the
+    // same table at the same time never leave a half written one behind.
+    const std::string tmpFile =
+        m_gasFile + ".tmp" + std::to_string(static_cast<long>(getpid()));
+    if (!m_medium.WriteGasFile(tmpFile)) {
+      throw std::runtime_error("cannot write the gas table " + tmpFile);
     }
+    std::filesystem::rename(tmpFile, m_gasFile);
     m_generated = true;
   }
 

@@ -39,9 +39,21 @@ double DriftField(double voltage);
 // Pressure conversion, 1 mbar = 0.750062 Torr.
 double MbarToTorr(double pressureMbar);
 
-// Magboltz name of a gas of Stage 1 ("He" -> "he", "Ar" -> "ar",
+// Magboltz name of a single gas of Stage 1 ("He" -> "he", "Ar" -> "ar",
 // "CO2" -> "co2"). Throws std::invalid_argument for an unknown gas.
 std::string MagboltzGasName(const std::string& gas);
+
+// A gas specification in the form MediumMagboltz::SetComposition() wants:
+// six (Magboltz name, percentage) pairs, the unused slots left empty.
+struct MagboltzMix {
+  static constexpr int kMaxComponents = 6;
+  std::string names[kMaxComponents];
+  double fractions[kMaxComponents] = {0., 0., 0., 0., 0., 0.};
+};
+
+// Composition of a Stage 1 gas specification ("He-90-CO2-10").
+// Throws std::invalid_argument for a bad specification.
+MagboltzMix MagboltzComposition(const std::string& gasSpec);
 
 // Cache file of the gas table: "{cacheDir}/{gas}_{p}mbar_{E}Vcm.gas".
 std::string GasFileName(const std::string& cacheDir, const std::string& gas,

@@ -43,7 +43,9 @@ find_package(Garfield REQUIRED)
 find_package(ROOT REQUIRED COMPONENTS RIO Tree)
 
 # The pure helpers, so that the unit tests need neither Garfield++ nor ROOT.
-add_library(drift_util STATIC src/DriftUtils.cc)
+# GasProperties.cc has no Geant4 dependency either, and both stages parse the
+# same gas specification, so it is compiled into this library as well.
+add_library(drift_util STATIC src/DriftUtils.cc src/GasProperties.cc)
 target_include_directories(drift_util PUBLIC ${PROJECT_SOURCE_DIR}/include)
 
 add_library(drift_core STATIC src/Drifter.cc)

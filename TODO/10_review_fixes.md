@@ -1,6 +1,18 @@
 # 10 レビュー指摘の修正 (発注書)
 
-前提: TODO/09 (指摘 R1〜R21)。状態: 発注中 (2026-09-07)。R21 は現状維持と決定済みで作業なし。
+前提: TODO/09 (指摘 R1〜R21)。状態: 実装済み (2026-09-07)。全 121 テスト合格 (112 → +9: AT-1_after_init, AT-1_two_beamon, AT-1_backward_run/check, AT4-1_eventlist/_check, AT-S3_pads_run/check, AT-D2_summary)。R21 は現状維持と決定済みで作業なし。
+
+検証結果 (発注者による):
+
+- 統合後のクリーンビルドで 121/121 合格。at1_default の `.root` を消して AT-1_default_check だけ走らせると落ち、run から走らせ直すと通る (B1)
+- R1/R2/R5 は新しい受け入れテスト (AT-1_after_init, AT-1_two_beamon, AT-1_backward) が固定した
+- `drift_scan.sh` を scans/am241 相当の名前で dry run すると Stage 1 のファイルだけが並ぶ。dry run は logs/ も .failed も作らない
+
+実装で決めたこと (発注書からの変更):
+
+- 群 A: AT-1_backward と AT4-1_eventlist は run と check の 2 テストに分けた (このリポジトリの慣習)。AT-1_after_init と AT4-1_eventlist は自前で `rm -f ./*.root` する。RunAction.cc の `EndsWithRoot` は Geant4 側なので CliUtils.hh に移していない。hits の中点化の後、AT4-4 の makeTracks の平均飛跡長は 59.4 mm (期待 60.6 ±10 % の中)
+- 群 B: `drift_scan.sh` は outdir に cd できなければ usage エラー (従来は mkdir で作っていた)。入力 0 本のメッセージは dry run でも出る。dry run の出力は名前を単一引用符で括る。`check_scan_summary.C` の contained_fraction は範囲でなく期待値との一致を判定する。AT-D2_dry のコマンド数は空白入りの名前を足したので 4
+- 群 C: TODO/07 のイベント一覧の文は統合時に A4 の順序 (events → summary → waveforms) に合わせた
 
 3 つの作業群に分け、別々の git worktree で並行して行う。各群は自分の worktree で全テストを通し、ブランチにコミットする。統合と最終検証は発注者 (Fable) が行う。
 

@@ -390,10 +390,37 @@ add_test(NAME AT-D2_log
 set_tests_properties(AT-D2_log PROPERTIES LABELS acceptance DEPENDS AT-D2_run)
 
 # ============================================================================
-# Stage 3: channel-response (TODO/06)
+# Stage 4: aget-shaper, the tests that need no pad map (TODO/07)
 # ============================================================================
 
-set(PADS_CSV ${PROJECT_SOURCE_DIR}/geometry/pads.csv)
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s4_cli)
+add_test(NAME AT4-1_no_input
+         COMMAND sh -c [=[! "$0"]=] $<TARGET_FILE:aget-shaper>
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s4_cli)
+set_tests_properties(AT4-1_no_input PROPERTIES LABELS acceptance)
+
+# A Stage 2 output has no "waveforms" ntuple, so Stage 4 has to refuse it.
+add_test(NAME AT4-1_no_waveforms
+         COMMAND sh -c [=[
+set -e
+cp ../s2_cache/Ar_200mbar_5.5MeV_2000V.root .
+! "$0" -i Ar_200mbar_5.5MeV_2000V.root
+test -z "$(ls *_raw.root 2>/dev/null)"
+]=]
+                 $<TARGET_FILE:aget-shaper>
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s4_cli)
+set_tests_properties(AT4-1_no_waveforms PROPERTIES LABELS acceptance
+                     DEPENDS AT2-4_cache)
+
+# ============================================================================
+# Stage 3 (TODO/06) and Stage 4 (TODO/07): everything that needs the board
+#
+# geometry/pads.csv is derived from the real detector geometry and is not in
+# git, so these tests exist only when it does; the root CMakeLists warns when
+# it is missing. The block below is guarded, not indented, to keep it
+# readable next to the stages above.
+# ============================================================================
+if(EXISTS ${PADS_CSV})
 
 # --- AT3-1 CLI --------------------------------------------------------------
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s3_cli)
@@ -464,3 +491,99 @@ set_tests_properties(AT3-4_run PROPERTIES LABELS acceptance
                      DEPENDS AT3-3_stage2)
 acceptance_check(AT3-4_check s3_window AT3-4_run
                  [[check_readout_empty.C("He_200mbar_0.3MeV_2000V_readout.root",10,30)]])
+
+# ============================================================================
+# Stage 4: aget-shaper (TODO/07)
+# ============================================================================
+
+set(TPCDAQ_MACROS ${PROJECT_SOURCE_DIR}/external/tpcdaq-macros)
+set(MAKE_CHANNEL_MAP ${PROJECT_SOURCE_DIR}/scripts/make_channel_map.py)
+
+# --- AT4-3 end to end, on the Stage 3 file of AT3-3 -------------------------
+add_test(NAME AT4-3_run
+         COMMAND $<TARGET_FILE:aget-shaper>
+                 -i He_200mbar_0.3MeV_2000V_readout.root
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s3_end2end)
+set_tests_properties(AT4-3_run PROPERTIES LABELS acceptance DEPENDS AT3-3_run)
+
+# The defaults of TODO/07: 223 ns peaking, 120 fC range, gain 1000, pedestal
+# 450, noise sigma 6. A pulse of more than 100 counts has to be there, and
+# every pulse whose area is above 3000 counts (where the noise of the summed
+# cells is far below 5 %) has to carry the charge of Stage 3.
+set(AT4_3_CALL "check_raw.C(\"He_200mbar_0.3MeV_2000V_raw.root\",\"He_200mbar_0.3MeV_2000V_readout.root\",10,450,6,1000,120,223,100,3000)")
+acceptance_check(AT4-3_check s3_end2end AT4-3_run "${AT4_3_CALL}")
+
+add_test(NAME AT4-1_output_name
+         COMMAND sh -c [=[test -f He_200mbar_0.3MeV_2000V_raw.root]=]
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s3_end2end)
+set_tests_properties(AT4-1_output_name PROPERTIES LABELS acceptance
+                     DEPENDS AT4-3_run)
+
+# An event whose time window caught no electron is written all the same, with
+# pedestal and noise only: AT3-4 left ten of them behind in s3_window.
+add_test(NAME AT4-1_empty_run
+         COMMAND $<TARGET_FILE:aget-shaper>
+                 -i He_200mbar_0.3MeV_2000V_readout.root
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s3_window)
+set_tests_properties(AT4-1_empty_run PROPERTIES LABELS acceptance
+                     DEPENDS AT3-4_run)
+acceptance_check(AT4-1_empty_check s3_window AT4-1_empty_run
+                 [[check_raw_empty.C("He_200mbar_0.3MeV_2000V_raw.root",10,450,6,100)]])
+
+# --- AT4-4 the closed loop through the macros of the real detector ----------
+# CO2 at 100 mbar and 1200 V are the conditions analyzeUVW.C assumes. The
+# Magboltz table for 60 V/cm is a new one, so this waits for AT2-4, which
+# empties the shared cache directory.
+acceptance_run(AT4-4_stage1 s4_tracks at4_stage1.mac)
+
+add_test(NAME AT4-4_stage2
+         COMMAND $<TARGET_FILE:drift-electrons>
+                 -i CO2_100mbar_2MeV.root -v 1200 -f 0.1 -c ${S2_CACHE}
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s4_tracks)
+set_tests_properties(AT4-4_stage2 PROPERTIES LABELS acceptance
+                     DEPENDS "AT4-4_stage1;AT2-4_cache" TIMEOUT 900)
+
+# The electrons arrive 23 to 31 us after the alpha, so the 20.48 us window
+# opens at 20 us.
+add_test(NAME AT4-4_stage3
+         COMMAND $<TARGET_FILE:channel-response>
+                 -i CO2_100mbar_2MeV_1200V.root -p ${PADS_CSV} -w 20
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s4_tracks)
+set_tests_properties(AT4-4_stage3 PROPERTIES LABELS acceptance
+                     DEPENDS AT4-4_stage2)
+
+add_test(NAME AT4-4_run
+         COMMAND $<TARGET_FILE:aget-shaper>
+                 -i CO2_100mbar_2MeV_1200V_readout.root
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s4_tracks)
+set_tests_properties(AT4-4_run PROPERTIES LABELS acceptance
+                     DEPENDS AT4-4_stage3)
+
+# analyzeUVW.C reads "channel_map.csv" from its working directory.
+add_test(NAME AT4-4_channel_map
+         COMMAND ${PYTHON3_EXECUTABLE} ${MAKE_CHANNEL_MAP} ${PADS_CSV}
+                 channel_map.csv
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s4_tracks)
+set_tests_properties(AT4-4_channel_map PROPERTIES LABELS acceptance)
+
+add_test(NAME AT4-4_uvw
+         COMMAND ${ROOT_EXECUTABLE} -l -b -q
+                 "${TPCDAQ_MACROS}/analyzeUVW.C(\"CO2_100mbar_2MeV_1200V_raw.root\")"
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s4_tracks)
+set_tests_properties(AT4-4_uvw PROPERTIES LABELS acceptance
+                     DEPENDS "AT4-4_run;AT4-4_channel_map")
+
+add_test(NAME AT4-4_tracks
+         COMMAND ${ROOT_EXECUTABLE} -l -b -q
+                 "${TPCDAQ_MACROS}/makeTracks.C(\"CO2_100mbar_2MeV_1200V_uvw.root\")"
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s4_tracks)
+set_tests_properties(AT4-4_tracks PROPERTIES LABELS acceptance
+                     DEPENDS AT4-4_uvw)
+
+# The alpha of at4_stage1.mac has half of its direction along the drift axis.
+# On the length see check_tracks.C: makeTracks.C measures the 2 %/98 % charge
+# quantiles of 3 mm slice centroids, which is 63 mm for these 72.8 mm alphas.
+acceptance_check(AT4-4_check s4_tracks AT4-4_tracks
+                 [[check_tracks.C("CO2_100mbar_2MeV_1200V_tracks.root",10,8,63.0,0.10,0.5,0.1)]])
+
+endif()  # EXISTS ${PADS_CSV}

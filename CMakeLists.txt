@@ -62,6 +62,30 @@ target_include_directories(readout_util PUBLIC ${PROJECT_SOURCE_DIR}/include)
 add_executable(channel-response src/channel_main.cc)
 target_link_libraries(channel-response PRIVATE readout_util ROOT::RIO ROOT::Tree)
 
+# --- Stage 4: aget-shaper (ROOT only) ---------------------------------------
+# The shaping itself is header-only (include/AgetResponse.hh), so the unit
+# tests and the acceptance macros share it with the application.
+add_library(aget_util STATIC src/AgetUtils.cc)
+target_include_directories(aget_util PUBLIC ${PROJECT_SOURCE_DIR}/include)
+
+add_executable(aget-shaper src/aget_main.cc)
+target_link_libraries(aget-shaper PRIVATE aget_util ROOT::RIO ROOT::Tree)
+
+# scripts/make_channel_map.py turns the pad map into the channel map that the
+# analysis macros of the real detector read.
+find_program(PYTHON3_EXECUTABLE python3 REQUIRED)
+
+# geometry/pads.csv is derived from the real detector geometry, so it is not
+# in git (TODO/07). The tests that need the real board are registered only
+# when it is there; everything else builds and runs without it.
+set(PADS_CSV ${PROJECT_SOURCE_DIR}/geometry/pads.csv)
+if(NOT EXISTS ${PADS_CSV})
+  message(WARNING
+    "geometry/pads.csv is missing: the Stage 3 and Stage 4 tests and the "
+    "13,010 pad unit test are not registered. Generate it with "
+    "external/tpcdaq-macros/make_pads.py (see TODO/07).")
+endif()
+
 enable_testing()
 add_subdirectory(tests/unit)
 add_subdirectory(tests/acceptance)

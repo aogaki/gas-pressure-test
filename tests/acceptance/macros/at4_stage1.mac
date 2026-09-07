@@ -1,0 +1,13 @@
+# AT4-4: input for Stage 2 to 4. CO2 at 100 mbar, 2 MeV, with hits: the
+# conditions the analysis macros of the real detector assume (TODO/07).
+# The alpha is tilted 30 degrees out of the alpha-source axis towards the
+# cathode, so that the track has an extent along the drift direction and
+# makeTracks.C sees more than the three slices it needs.
+/tpc/gas CO2
+/tpc/pressure 100
+/tpc/hits true
+/run/initialize
+/gps/energy 2 MeV
+/gps/direction 0 0.5 0.866
+/random/setSeeds 1 1
+/run/beamOn 10

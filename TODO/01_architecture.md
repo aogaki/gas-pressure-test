@@ -13,12 +13,21 @@ mini TPC に適したガス圧 (と将来的に電圧) を決めるためのデ�
 He は 300 keV の α を検出エリア内で止めることが目的なので低圧側を使う。
 検出エリアはガスボリューム全体 (200 mm × 200 mm × 500 mm)。「検出エリア内で止まる」は exited = 0 と同じ意味。
 
-## 2 段階パイプライン
+## パイプライン
 
 | 段階 | 実行ファイル | ツール | 入力 | 出力 |
 |---|---|---|---|---|
 | Stage 1 | `gas-pressure-test` | Geant4 11.3.2 (/opt/Geant4) | UI マクロファイル 1 つ | `{gas}_{p}mbar_{E}MeV.root` |
 | Stage 2 | `drift-electrons` | Garfield++ 2025.12 (/opt/Garfield) | Stage 1 の ROOT ファイル, `-v 電圧[V]` | `{gas}_{p}mbar_{E}MeV_{V}V.root` |
+| Stage 3 | `channel-response` | ROOT のみ | Stage 2 の ROOT ファイル, `-p geometry/pads.csv` | `..._{V}V_readout.root` |
+| Stage 4 | `aget-shaper` | ROOT のみ | Stage 3 の ROOT ファイル | `..._{V}V_raw.root` |
+
+最初の 2 段階が物理 (TODO/02, TODO/03)、後の 2 段階が読み出し (TODO/06, TODO/07)。
+Stage 3 は電子をパッド・ストリップ・チャンネルと 40 ns の時間ビンに振り分け、Stage 4 は
+AGET の整形と ADC 変換を掛けて実機の生データと同じ `raw` ツリーを作る。Stage 4 の出力は
+`external/tpcdaq-macros/` の実データ用マクロ (analyzeUVW.C → makeTracks.C) がそのまま読める。
+読み出し板の地図 (`geometry/pads.csv`) と `channel_map.csv` は実機ジオメトリ由来なので
+git に入れない (TODO/07)。無い環境では Stage 3〜4 のテストは登録されない。
 
 役割分担の理由:
 

@@ -1,0 +1,16 @@
+# pads_synthetic.csv  units: mm
+# A hand-made stand-in for geometry/pads.csv, with the same columns: five
+# rhombic pads (edge 1.0 mm, long diagonal sqrt(3) mm along the strip) in the
+# three orientations of the real board. The positions are invented, so this
+# file carries no detector geometry and is committed; the real pads.csv is
+# not (see TODO/07, "geometry derived files").
+#   pads 0 and 1: two pads of one U strip, one pad pitch apart along z
+#   pad 2: a second U strip, one strip pitch (1.5 mm) away in x
+#   pad 3: a V pad at the origin        pad 4: a W pad far from the others
+# vertices CCW in (x, z), starting at the one below the centre
+pad_id,strip_dir,strip_no,pad_no,aget,ch_graw,ch_geom,cx,cz,x0,z0,x1,z1,x2,z2,x3,z3
+0,U,1,0,0,0,0,10.000,-10.000,10.000,-10.866,10.500,-10.000,10.000,-9.134,9.500,-10.000
+1,U,1,1,0,0,0,10.000,-8.268,10.000,-9.134,10.500,-8.268,10.000,-7.402,9.500,-8.268
+2,U,2,0,0,1,1,11.500,-10.000,11.500,-10.866,12.000,-10.000,11.500,-9.134,11.000,-10.000
+3,V,5,0,1,7,7,0.000,0.000,-0.750,-0.433,0.250,-0.433,0.750,0.433,-0.250,0.433
+4,W,9,0,3,66,62,-20.000,-30.000,-20.250,-30.433,-19.250,-30.433,-19.750,-29.567,-20.750,-29.567

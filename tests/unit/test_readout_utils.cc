@@ -10,17 +10,28 @@
 #include "ChannelUtils.hh"
 #include "PadMap.hh"
 
-#ifndef PADS_CSV_PATH
-#error "PADS_CSV_PATH must be defined by the build"
+// The synthetic map of tests/unit/data is always there. The real map,
+// geometry/pads.csv, is derived from the detector geometry and is not in git,
+// so the build defines PADS_CSV_PATH only when it exists (TODO/07).
+#ifndef SYNTHETIC_PADS_CSV_PATH
+#error "SYNTHETIC_PADS_CSV_PATH must be defined by the build"
 #endif
 
 namespace {
 
+// Five pads in the three orientations of the real board, invented positions.
+const PadMap& SyntheticPads() {
+  static const PadMap map(SYNTHETIC_PADS_CSV_PATH);
+  return map;
+}
+
+#ifdef PADS_CSV_PATH
 // The real pad map is read once: 13,010 pads take a moment to parse.
 const PadMap& Pads() {
   static const PadMap map(PADS_CSV_PATH);
   return map;
 }
+#endif
 
 // A single rhombic pad, counter-clockwise, centred on (0, 0).
 Pad UnitPad() {
@@ -61,6 +72,75 @@ TEST(PadContainsTest, OutsidePointsAreRejected) {
   EXPECT_FALSE(PadContains(pad, 0., 1.));
   EXPECT_FALSE(PadContains(pad, 0.4, 0.6));  // outside the slanted edge
 }
+
+// --- the synthetic map: the basics of reading and looking up ---------------
+
+TEST(PadMapTest, ReadsEveryColumnOfTheSyntheticMap) {
+  const PadMap& map = SyntheticPads();
+  ASSERT_EQ(map.Size(), 5u);
+
+  const Pad& first = map.Pads().front();
+  EXPECT_EQ(first.padId, 0);
+  EXPECT_EQ(first.stripDir, "U");
+  EXPECT_EQ(first.stripNo, 1);
+  EXPECT_EQ(first.padNo, 0);
+  EXPECT_EQ(first.aget, 0);
+  EXPECT_EQ(first.chGraw, 0);
+  EXPECT_EQ(first.chGeom, 0);
+  EXPECT_NEAR(first.cx, 10., 1e-9);
+  EXPECT_NEAR(first.cz, -10., 1e-9);
+  EXPECT_NEAR(first.x[0], 10., 1e-9);
+  EXPECT_NEAR(first.z[0], -10.866, 1e-9);
+  EXPECT_NEAR(first.x[1], 10.5, 1e-9);
+  EXPECT_NEAR(first.z[1], -10., 1e-9);
+
+  const Pad& last = map.Pads().back();
+  EXPECT_EQ(last.stripDir, "W");
+  EXPECT_EQ(last.stripNo, 9);
+  EXPECT_EQ(last.aget, 3);
+  EXPECT_EQ(last.chGraw, 66);
+
+  // The bounding box covers every vertex of every pad.
+  EXPECT_NEAR(map.MinX(), -20.75, 1e-9);
+  EXPECT_NEAR(map.MaxX(), 12., 1e-9);
+  EXPECT_NEAR(map.MinZ(), -30.433, 1e-9);
+  EXPECT_NEAR(map.MaxZ(), 0.433, 1e-9);
+}
+
+TEST(PadMapTest, SyntheticCentresFindTheirOwnPad) {
+  const PadMap& map = SyntheticPads();
+  for (std::size_t i = 0; i < map.Size(); ++i) {
+    const Pad& pad = map.Pads()[i];
+    EXPECT_EQ(map.Find(pad.cx, pad.cz), static_cast<int>(i)) << "pad " << i;
+  }
+}
+
+TEST(PadMapTest, SyntheticPointsBetweenAndOffThePadsHaveNoPad) {
+  const PadMap& map = SyntheticPads();
+  EXPECT_EQ(map.Find(10.9, -10.), -1);   // between the two U strips
+  EXPECT_EQ(map.Find(5., -20.), -1);     // inside the box, on no pad
+  EXPECT_EQ(map.Find(100., 0.), -1);     // outside the box
+  EXPECT_EQ(map.Find(0., -1000.), -1);
+}
+
+TEST(PadMapTest, SyntheticPointJustInsideAVertexBelongsToThatPad) {
+  const PadMap& map = SyntheticPads();
+  for (std::size_t i = 0; i < map.Size(); ++i) {
+    const Pad& pad = map.Pads()[i];
+    // 0.01 mm from vertex 1 towards the centre.
+    const double dx = pad.cx - pad.x[1];
+    const double dz = pad.cz - pad.z[1];
+    const double norm = std::sqrt(dx * dx + dz * dz);
+    EXPECT_EQ(map.Find(pad.x[1] + 0.01 * dx / norm,
+                       pad.z[1] + 0.01 * dz / norm),
+              static_cast<int>(i))
+        << "pad " << i;
+  }
+}
+
+// --- the real map: only when geometry/pads.csv is there --------------------
+
+#ifdef PADS_CSV_PATH
 
 TEST(PadMapTest, ReadsEveryPadOfTheRealMap) {
   const PadMap& map = Pads();
@@ -125,6 +205,8 @@ TEST(PadMapTest, PointJustInsideAVertexBelongsToThatPad) {
     EXPECT_EQ(map.Find(px, pz), i) << "pad " << i;
   }
 }
+
+#endif  // PADS_CSV_PATH
 
 TEST(PadMapTest, MissingFileThrows) {
   EXPECT_THROW(PadMap("/no/such/pads.csv"), std::runtime_error);

@@ -19,9 +19,15 @@
 // t_p means tau = t_p / 1.1664.
 constexpr double kAgetPeakX = 1.1664;
 
-// The kernel is cut off after this many time constants: h has fallen to
-// 1.4e-3 of the peak there and only the undershoot tail is left.
+// The kernel is cut off after this many time constants: h(5 tau) = -8.3e-4
+// (on the undershoot side), so only that tail is left.
 constexpr double kAgetCutoffTau = 5.;
+
+// The shape of the GRAW data of graw2root.C: 4 AGETs of 68 channels, each
+// sampled into 512 time cells.
+constexpr int kNAget = 4;
+constexpr int kNChannel = 68;
+constexpr int kNCells = 512;
 
 // Elementary charge [fC]: one electron of gain-multiplied charge.
 constexpr double kElectronChargeFC = 1.602e-4;

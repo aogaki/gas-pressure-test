@@ -1,0 +1,8 @@
+# AT-1: alphas shot at -z, away from the gas (TODO/09 R5). The source sits on
+# the entrance plane, so none of them enters the gas volume.
+/tpc/gas Ar
+/tpc/pressure 200
+/run/initialize
+/gps/direction 0 0 -1
+/random/setSeeds 1 1
+/run/beamOn 10

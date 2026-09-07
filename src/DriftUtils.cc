@@ -4,42 +4,17 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdio>
-#include <cstdlib>
 #include <map>
 #include <stdexcept>
 #include <vector>
 
+#include "CliUtils.hh"
 #include "GasProperties.hh"
 
 namespace {
 
 constexpr double kTorrPerMbar = 0.750062;
 constexpr const char* kRootSuffix = ".root";
-
-// getopt() keeps state between calls, which the unit tests exercise.
-void ResetGetopt() {
-#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || \
-    defined(__NetBSD__)
-  optreset = 1;
-  optind = 1;
-#else
-  optind = 0;
-#endif
-}
-
-// strtod() with a "the whole argument was a number" check.
-bool ToDouble(const char* text, double& value) {
-  char* end = nullptr;
-  value = std::strtod(text, &end);
-  return end != text && *end == '\0';
-}
-
-bool ToLong(const char* text, long& value) {
-  char* end = nullptr;
-  value = std::strtol(text, &end, 10);
-  return end != text && *end == '\0';
-}
 
 }  // namespace
 
@@ -104,20 +79,12 @@ bool ParseDriftOptions(int argc, char* const argv[], DriftOptions& options,
   return true;
 }
 
-std::string DriftFormatNumber(double value) {
-  char buffer[32];
-  std::snprintf(buffer, sizeof(buffer), "%g", value);
-  return buffer;
-}
-
 std::string DriftOutputName(const std::string& input, double voltage) {
   std::string stem = input;
-  const size_t suffix = std::string(kRootSuffix).size();
-  if (stem.size() >= suffix && stem.compare(stem.size() - suffix, suffix,
-                                            kRootSuffix) == 0) {
-    stem.erase(stem.size() - suffix);
+  if (EndsWith(stem, kRootSuffix)) {
+    stem.erase(stem.size() - std::string(kRootSuffix).size());
   }
-  return stem + "_" + DriftFormatNumber(voltage) + "V" + kRootSuffix;
+  return stem + "_" + FormatNumber(voltage) + "V" + kRootSuffix;
 }
 
 double DriftField(double voltage) { return voltage / kDriftGapCm; }
@@ -146,8 +113,8 @@ MagboltzMix MagboltzComposition(const std::string& gasSpec) {
 
 std::string GasFileName(const std::string& cacheDir, const std::string& gas,
                         double pressureMbar, double fieldVcm) {
-  return cacheDir + "/" + gas + "_" + DriftFormatNumber(pressureMbar) +
-         "mbar_" + DriftFormatNumber(fieldVcm) + "Vcm.gas";
+  return cacheDir + "/" + gas + "_" + FormatNumber(pressureMbar) + "mbar_" +
+         FormatNumber(fieldVcm) + "Vcm.gas";
 }
 
 int SampleElectronCount(double edepMeV, double wEv, double fano,

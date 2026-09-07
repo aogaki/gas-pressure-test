@@ -27,9 +27,6 @@ bool ParseDriftOptions(int argc, char* const argv[], DriftOptions& options,
 // Usage text, without a trailing newline.
 std::string DriftUsage();
 
-// Shortest "%g" style representation of a number.
-std::string DriftFormatNumber(double value);
-
 // Output name: "_{V}V" inserted in front of the ".root" suffix of the input.
 std::string DriftOutputName(const std::string& input, double voltage);
 

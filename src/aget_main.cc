@@ -10,6 +10,7 @@
 
 #include "AgetResponse.hh"
 #include "AgetUtils.hh"
+#include "ChannelUtils.hh"
 #include "TFile.h"
 #include "TTree.h"
 
@@ -18,27 +19,11 @@ namespace {
 // The same fixed seed as Stage 2: a run is reproducible (TODO/07).
 constexpr unsigned int kRandomSeed = 12345;
 
-// The shape of the GRAW data of graw2root.C.
-constexpr int kNAget = 4;
-constexpr int kNChannel = 68;
-constexpr int kNCells = 512;
-
-// The sampling of the AGET (TODO/06): 25 MHz.
-constexpr double kBinNs = 40.;
-
 // A monotonic stand-in for the 48 bit CoBo timestamp.
 constexpr unsigned long long kTicksPerEvent = 100000000ULL;
 
 // One (aget, ch_graw) channel.
 using Channel = std::pair<int, int>;
-
-// One row of the Stage 3 "waveforms" ntuple, as charge [fC].
-struct ChargeCell {
-  int aget = 0;
-  int chGraw = 0;
-  int bin = 0;
-  double chargeFC = 0.;
-};
 
 // Reads the eventIDs of an ntuple that has one row per event, in file order
 // and without repetition.
@@ -88,17 +73,23 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  // Every event of the run gets an entry, even one without electrons. The
-  // event list is the one of Stage 3 ("summary", one row per event); a file
-  // without it falls back to the Stage 1 events.
+  // Every event of the run gets an entry, even one without electrons, so the
+  // entries of "raw" match the triggers of the real detector one for one.
+  // The list is the Stage 1 "events" ntuple, which Stage 2 and Stage 3 carry
+  // along; a file without it falls back to the Stage 3 "summary" (one row per
+  // event that had electrons) and then to the events "waveforms" itself
+  // shows (TODO/09 R6).
   std::vector<int> events =
-      EventIds(input.Get<TTree>("summary"), options.maxEvents);
+      EventIds(input.Get<TTree>("events"), options.maxEvents);
   if (events.empty()) {
-    events = EventIds(input.Get<TTree>("events"), options.maxEvents);
+    events = EventIds(input.Get<TTree>("summary"), options.maxEvents);
+  }
+  if (events.empty()) {
+    events = EventIds(waveforms, options.maxEvents);
   }
 
-  // The electrons of one event, per channel and time cell. The whole ntuple
-  // is read at once because the events are written out in order.
+  // One row of the Stage 3 "waveforms" ntuple: the electrons of one channel
+  // in one time cell.
   int wfEventID = 0, wfAget = 0, wfChGraw = 0, wfBin = 0;
   double wfElectrons = 0.;
   waveforms->SetBranchAddress("eventID", &wfEventID);
@@ -106,32 +97,6 @@ int main(int argc, char** argv) {
   waveforms->SetBranchAddress("ch_graw", &wfChGraw);
   waveforms->SetBranchAddress("bin", &wfBin);
   waveforms->SetBranchAddress("electrons", &wfElectrons);
-
-  // The rows are kept as they come, one small record each: a run of many
-  // events would need gigabytes if every channel held all 512 cells here.
-  std::map<int, std::vector<ChargeCell>> charge;
-  std::set<int> waveformEvents;
-  long long droppedFpn = 0, droppedRange = 0;
-  const Long64_t nRows = waveforms->GetEntries();
-  for (Long64_t i = 0; i < nRows; ++i) {
-    waveforms->GetEntry(i);
-    if (options.maxEvents > 0 && wfEventID >= options.maxEvents) continue;
-    waveformEvents.insert(wfEventID);
-    if (wfAget < 0 || wfAget >= kNAget || wfChGraw < 0 ||
-        wfChGraw >= kNChannel || wfBin < 0 || wfBin >= kNCells) {
-      ++droppedRange;
-      continue;
-    }
-    if (IsFpnChannel(wfChGraw)) {  // no signal on the FPN channels
-      ++droppedFpn;
-      continue;
-    }
-    charge[wfEventID].push_back(ChargeCell{
-        wfAget, wfChGraw, wfBin, AgetChargeFC(wfElectrons, options.gain)});
-  }
-  if (events.empty()) {  // neither "summary" nor "events": use what fired
-    events.assign(waveformEvents.begin(), waveformEvents.end());
-  }
 
   const std::string outputName = AgetOutputName(options.input);
   TFile output(outputName.c_str(), "RECREATE");
@@ -159,26 +124,48 @@ int main(int argc, char** argv) {
   std::normal_distribution<double> noise(0.,
                                          withNoise ? options.noiseSigma : 1.);
 
+  // Stage 3 writes the rows of "waveforms" in eventID order and the event
+  // list is in that order too, so one pass through the tree serves the whole
+  // run: for every event the rows are consumed while their eventID matches,
+  // and only the channels of the event being written are ever held in memory
+  // (TODO/09 R18).
+  const Long64_t nRows = waveforms->GetEntries();
+  Long64_t row = 0;
+  long long droppedFpn = 0, droppedRange = 0, droppedUnlisted = 0;
   long long saturated = 0, clipped = 0;
   int highest = 0;
   for (int event : events) {
     eventId = static_cast<UInt_t>(event);
     eventTime = static_cast<ULong64_t>(event) * kTicksPerEvent;
 
-    // The shaped signal of every channel that saw electrons, in ADC counts.
+    // The signal of every channel that saw electrons, first as charge [fC]
+    // and then, once the event is complete, shaped into ADC counts.
     std::map<Channel, std::vector<double>> shaped;
-    const auto found = charge.find(event);
-    if (found != charge.end()) {
-      for (const ChargeCell& cell : found->second) {
-        std::vector<double>& cells = shaped[{cell.aget, cell.chGraw}];
-        if (cells.empty()) cells.resize(kNCells, 0.);
-        cells[cell.bin] += cell.chargeFC;
+    while (row < nRows) {
+      waveforms->GetEntry(row);
+      if (wfEventID > event) break;  // a later event, left for its own turn
+      ++row;
+      if (wfEventID != event) {  // an event the list does not know about
+        ++droppedUnlisted;
+        continue;
       }
-      for (auto& entry : shaped) {
-        entry.second = AgetConvolve(entry.second, kernel);
-        for (double& value : entry.second) {
-          value = AgetAdcOfCharge(value, options.rangeFC);
-        }
+      if (wfAget < 0 || wfAget >= kNAget || wfChGraw < 0 ||
+          wfChGraw >= kNChannel || wfBin < 0 || wfBin >= kNCells) {
+        ++droppedRange;
+        continue;
+      }
+      if (IsFpnChannel(wfChGraw)) {  // no signal on the FPN channels
+        ++droppedFpn;
+        continue;
+      }
+      std::vector<double>& cells = shaped[{wfAget, wfChGraw}];
+      if (cells.empty()) cells.resize(kNCells, 0.);
+      cells[wfBin] += AgetChargeFC(wfElectrons, options.gain);
+    }
+    for (auto& entry : shaped) {
+      entry.second = AgetConvolve(entry.second, kernel);
+      for (double& value : entry.second) {
+        value = AgetAdcOfCharge(value, options.rangeFC);
       }
     }
 
@@ -207,6 +194,15 @@ int main(int argc, char** argv) {
     raw->Fill();
   }
 
+  // Whatever is left behind the last event of the list: the rows -n left out,
+  // and any event the list does not know about.
+  while (row < nRows) {
+    waveforms->GetEntry(row);
+    ++row;
+    if (options.maxEvents > 0 && wfEventID >= options.maxEvents) continue;
+    ++droppedUnlisted;
+  }
+
   output.Write();
   output.Close();
 
@@ -214,6 +210,12 @@ int main(int argc, char** argv) {
       "aget-shaper: %zu events, %lld waveform rows (%lld on FPN channels,"
       " %lld out of range)\n",
       events.size(), nRows, droppedFpn, droppedRange);
+  if (droppedUnlisted > 0) {
+    std::fprintf(stderr,
+                 "aget-shaper: warning: %lld waveform row(s) belong to an"
+                 " event that is not in the event list and were dropped\n",
+                 droppedUnlisted);
+  }
   std::printf(
       "aget-shaper: peaking %g ns (tau %.1f ns, %zu kernel samples), range"
       " %g fC, gain %g, pedestal %g, noise %g -> %s\n",

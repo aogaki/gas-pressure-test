@@ -1,0 +1,7 @@
+# AT-1: a second /run/beamOn in the same macro, must abort (TODO/09 R2)
+/tpc/gas Ar
+/tpc/pressure 200
+/run/initialize
+/random/setSeeds 1 1
+/run/beamOn 5
+/run/beamOn 5

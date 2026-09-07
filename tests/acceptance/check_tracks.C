@@ -11,9 +11,10 @@
 // 70.9 mm) the 2 %/98 % quantiles of the true energy deposit already give
 // 66.4 mm, and the slice centroids take up to 1.5 mm off each end of the
 // drift extent, which is another 6 mm along a track inclined by 30 degrees.
-// The expected length is therefore about 63 mm, not the CSDA range; a wrong
-// drift velocity or strip pitch would still show up, in the length as well
-// as in the direction cosine.
+// The expected length is therefore about 60 mm, not the CSDA range, and the
+// measurement gives 60.6 mm (the error on the mean of ten tracks is 0.6 mm);
+// a wrong drift velocity or strip pitch would still show up, in the length
+// as well as in the direction cosine.
 void check_tracks(const char* tracksFile, int nEvents, int minOk,
                   double expectedLengthMm, double lengthTolerance,
                   double expectedDirZ, double dirTolerance) {

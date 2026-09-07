@@ -26,7 +26,6 @@ void check_raw(const char* rawFile, const char* readoutFile, int nEvents,
                double pedestal, double noiseSigma, double gain,
                double rangeFC, double peakingNs, double minPulseAdc,
                double minAreaAdc = 1000.) {
-  const int kNAget = 4, kNChannel = 68, kNCells = 512;
   const int kPedLo = 1, kPedHi = 20;
 
   TFile* file = AtOpen(rawFile);

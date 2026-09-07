@@ -8,6 +8,7 @@
 #include "G4DynamicParticle.hh"
 #include "G4Material.hh"
 #include "G4LogicalVolume.hh"
+#include "G4StateManager.hh"
 #include "G4SystemOfUnits.hh"
 #include "G4UImanager.hh"
 #include "G4Track.hh"
@@ -90,4 +91,25 @@ TEST(TpcMessengerTest, CommandsUpdateTheConfiguration) {
   EXPECT_TRUE(config.hits);
   EXPECT_EQ(ui->ApplyCommand("/tpc/hits false"), 0);
   EXPECT_FALSE(config.hits);
+}
+
+// The three commands are PreInit only, so that a change after
+// /run/initialize can never disagree with the geometry (TODO/09 R1, R2).
+TEST(TpcMessengerTest, CommandsAreRefusedAfterInitialization) {
+  TpcConfig config;
+  config.gas = "Ar";
+  config.pressureMbar = 200.;
+  config.hits = false;
+  TpcMessenger messenger(config);
+  G4UImanager* ui = G4UImanager::GetUIpointer();
+  G4StateManager* states = G4StateManager::GetStateManager();
+
+  states->SetNewState(G4State_Idle);
+  EXPECT_NE(ui->ApplyCommand("/tpc/gas He"), 0);
+  EXPECT_EQ(config.gas, "Ar");
+  EXPECT_NE(ui->ApplyCommand("/tpc/pressure 50"), 0);
+  EXPECT_DOUBLE_EQ(config.pressureMbar, 200.);
+  EXPECT_NE(ui->ApplyCommand("/tpc/hits true"), 0);
+  EXPECT_FALSE(config.hits);
+  states->SetNewState(G4State_PreInit);
 }

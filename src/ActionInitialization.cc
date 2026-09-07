@@ -12,7 +12,7 @@ ActionInitialization::ActionInitialization(const TpcConfig& config,
 void ActionInitialization::Build() const {
   auto* generator = new PrimaryGeneratorAction();
   SetUserAction(generator);
-  SetUserAction(new RunAction(fConfig, fDetector, *generator));
+  SetUserAction(new RunAction(fConfig, *generator));
   auto* eventAction = new EventAction();
   SetUserAction(eventAction);
   SetUserAction(new SteppingAction(fConfig, fDetector, *eventAction));

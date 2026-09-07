@@ -136,3 +136,77 @@ acceptance_check(AT-11_lin_check at11_lin AT-11_lin_run
 acceptance_run(AT-11_iso_run at11_iso at11_iso.mac)
 acceptance_check(AT-11_iso_check at11_iso AT-11_iso_run
                  [[check_gps_angle.C("Ar_200mbar_5.5MeV.root",0.98)]])
+
+# --- AT-S1 scan.sh dry run: macros are generated, nothing executes ---------
+set(SCAN_SH ${PROJECT_SOURCE_DIR}/scripts/scan.sh)
+set(RANGE_SUMMARY ${PROJECT_SOURCE_DIR}/scripts/range_summary.C)
+
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/atS1)
+add_test(NAME AT-S1_run
+         COMMAND ${SCAN_SH} -d -o . -g "He" -p "200" -e "0.3 1.0" -n 10
+                 -x $<TARGET_FILE:gas-pressure-test>
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/atS1)
+add_test(NAME AT-S1_check
+         COMMAND sh -c [=[
+set -e
+diff - macros/He_200mbar_0.3MeV.mac <<'MAC'
+/tpc/gas He
+/tpc/pressure 200
+/tpc/hits false
+/run/initialize
+/gps/energy 0.3 MeV
+/analysis/setFileName He_200mbar_0.3MeV.root
+/random/setSeeds 1 1
+/run/beamOn 10
+MAC
+diff - macros/He_200mbar_1.0MeV.mac <<'MAC'
+/tpc/gas He
+/tpc/pressure 200
+/tpc/hits false
+/run/initialize
+/gps/energy 1.0 MeV
+/analysis/setFileName He_200mbar_1.0MeV.root
+/random/setSeeds 2 2
+/run/beamOn 10
+MAC
+test -z "$(ls *.root 2>/dev/null)"
+]=]
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/atS1)
+set_tests_properties(AT-S1_run PROPERTIES LABELS acceptance)
+set_tests_properties(AT-S1_check PROPERTIES LABELS acceptance DEPENDS AT-S1_run)
+
+# --- AT-S2 scan.sh real run, -j 2 -------------------------------------------
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/atS2)
+add_test(NAME AT-S2_run
+         COMMAND ${SCAN_SH} -o . -g "He" -p "200" -e "0.3 1.0" -n 10 -j 2
+                 -x $<TARGET_FILE:gas-pressure-test>
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/atS2)
+set_tests_properties(AT-S2_run PROPERTIES LABELS acceptance)
+
+acceptance_check(AT-S2_check_0.3MeV atS2 AT-S2_run
+                 [[check_scan_run.C("He_200mbar_0.3MeV.root",10,200)]])
+acceptance_check(AT-S2_check_1.0MeV atS2 AT-S2_run
+                 [[check_scan_run.C("He_200mbar_1.0MeV.root",10,200)]])
+
+add_test(NAME AT-S2_logs
+         COMMAND sh -c [=[test "$(ls logs/*.log 2>/dev/null | wc -l | tr -d ' ')" = 2]=]
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/atS2)
+set_tests_properties(AT-S2_logs PROPERTIES LABELS acceptance DEPENDS AT-S2_run)
+
+# --- AT-S3 range_summary.C over AT-S2's output ------------------------------
+set(AT_S3_CALL "${RANGE_SUMMARY}(\".\")")
+add_test(NAME AT-S3_run
+         COMMAND sh -c [=["$0" -l -b -q "$1" > summary.csv]=]
+                 ${ROOT_EXECUTABLE} "${AT_S3_CALL}"
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/atS2)
+set_tests_properties(AT-S3_run PROPERTIES LABELS acceptance DEPENDS AT-S2_run)
+
+acceptance_check(AT-S3_check atS2 AT-S3_run [[check_scan_summary.C("summary.csv")]])
+
+# --- AT-S4 scan.sh with a non-existent executable exits non-zero -----------
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/atS4)
+add_test(NAME AT-S4_missing_exe
+         COMMAND sh -c [=[! "$0" -o . -g "He" -p "200" -e "0.3" -n 1 -x /no/such/exe-does-not-exist]=]
+                 ${SCAN_SH}
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/atS4)
+set_tests_properties(AT-S4_missing_exe PROPERTIES LABELS acceptance)

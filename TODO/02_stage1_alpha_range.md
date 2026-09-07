@@ -55,6 +55,8 @@ NIST ASTAR の CSDA 飛程 RANGE(c) [g/cm2] を ρ(P) = ρ_NIST × P/1013.25 で
 - 10 イベントのマクロ (Ar, 200 mbar, 5.5 MeV, hits false) → `Ar_200mbar_5.5MeV.root` が生成され、`events` に 10 エントリ、`hits` ntuple は存在しない
 - 同じマクロで `/tpc/hits true` → `hits` に 1 エントリ以上
 - `/analysis/setFileName custom` を書いたマクロ → `custom.root` ができる
+- `/analysis/setFileName He_200mbar_0.3MeV` (ドット入り、拡張子なし) を書いたマクロ → `He_200mbar_0.3MeV.root` ができ、`events` に 10 エントリ
+- どのファイルにも `run` ntuple が 1 エントリあり、gas, pressure, hits がマクロの値と一致する
 - 引数なしで起動 → 終了コード 1、ファイルは作られない
 - `/tpc/gas Xe` を書いたマクロ → 終了コード 0 以外
 
@@ -89,7 +91,7 @@ He, Ar, CO2 で
 ### AT-6 エネルギー保存 (Ar, 1013.25 mbar, 5.5 MeV, hits true)
 
 - 各イベントで `hits` の edep の合計が events.edepTotal と一致 (1e-6 MeV 以内)
-- edepTotal の平均が e0 の 99.5 % 以上 100.0 % 以下 (蛍光 X 線や δ 線の脱出は 0.5 % 未満)
+- edepTotal の平均が e0 の 99.9 % 以上 100.0 % 以下 (生成閾値 10 m なので δ 線も蛍光 X 線も脱出しない)
 
 ### AT-7 再現性
 
@@ -155,13 +157,23 @@ Serial run manager。Ar 200 mbar、5.5 MeV、10000 イベント、`/random/setSe
 - 1M イベントに外挿すると hits false で約 34 分・66 MB、hits true で約 1.7 時間・183 GB
 - 受け入れテストの `build/tests/acceptance/` は hits true の 3 ラン (各 1000 イベント) で約 600 MB を使う
 
+## 検証後の追加タスク (2026-09-07)
+
+検証で分かったこと: 46 テスト全て合格、飛程は ASTAR と 1.5 % 以内で一致。hits true の 1 イベント 3200 行のうち 85 % は δ 線 (pdg 11) の行で、付与エネルギーの 9 % しか持たない。`/analysis/setFileName` にドット入りの名前を渡すと Geant4 が拡張子と誤認して SIGSEGV する。
+
+1. 出力名の補正: BeginOfRunAction で G4AnalysisManager のファイル名が `.root` で終わらなければ `.root` を付けて設定し直す (自動命名も同じ経路にする)。AT-1 にドット入り名のケースを追加。Geant4 の内部状態が回復せず落ちる場合はその旨を報告し、TODO/01 の「付け忘れはアプリが補う」を消す
+2. 生成閾値を 10 m にする (PhysicsList の defaultCutValue)。`G4StepLimiterPhysics::SetApplyToAll(true)` は不要になるので消す。AT-6 の期待値を 99.9 % に変更。全テストが通ることを確認
+3. `run` ntuple (gas S, pressure D, hits I) を 1 行書く。TODO/01 の表の通り。AT-1 の判定に追加
+4. 速度計測 (タスク 11) をやり直し、「計測結果」に 2 つ目の表として追記する (生成閾値変更後)。hits の行数の内訳 (pdg ごと) も書く
+5. 圧縮: G4AnalysisManager の既定 (zlib レベル 1) のまま。`/analysis/compression` で変えられることを macros/ の例にコメントで書く
+
 ## エネルギースキャンの計画 (要相談)
 
 0.3 MeV から 10 MeV を 0.1 MeV 刻み (98 点)、1 ラン 1M イベントの案について。
 
-- hits false なら 1M イベントは 1 プロセスあたり数分から十数分の見込み (計測して更新する)。98 点 × 3 ガス × 圧力数 をプロセス並列で回すのは現実的
+- hits false の実測は 488 イベント/秒 (Ar 200 mbar 5.5 MeV、生成閾値変更前)。1M イベントで約 34 分、66 MB。98 点 × 3 ガス × 5 圧力 = 1470 ランなら 14 プロセス並列で約 60 時間。現実的だが長い
 - hits true で 1M イベントは 1 ファイル数十 GB になるので、hits はドリフトに使う少数のランに限る
-- 代案: GPS の一様スペクトル (`/gps/ene/type Lin`, gradient 0) で 0.3 から 10 MeV を 1 ランで走らせ、e0 でビン分けする。1M イベントなら 0.1 MeV あたり約 1 万イベント。コードは不要
+- 代案: GPS の一様スペクトル (`/gps/ene/type Lin`, gradient 0) で 0.3 から 10 MeV を 1 ランで走らせ、e0 でビン分けする。1M イベントなら 0.1 MeV あたり約 1 万イベント。3 ガス × 5 圧力 = 15 ランで 14 プロセス並列なら約 1 時間。コードは不要 (AT-11 で動作確認済み)
 
 ## 実装メモ
 
@@ -169,5 +181,5 @@ Serial run manager。Ar 200 mbar、5.5 MeV、10000 イベント、`/random/setSe
 - `exited` は α のステップの post-step point がガスから world に出たとき (fGeomBoundary) に立てる
 - trackLength は α のガス内ステップのステップ長の和
 - `/tpc/hits` は G4UserLimits の SetMaxAllowedStep を 1 mm と DBL_MAX で切り替える。G4StepLimiterPhysics は常に登録する
-- 自動命名は BeginOfRunAction で `G4AnalysisManager::GetFileName()` が空のときだけ行う。GPS のエネルギーは `G4GeneralParticleSource::GetCurrentSource()->GetEneDist()` の `GetEnergyDisType()` と `GetMonoEnergy()` から取る
+- 自動命名は BeginOfRunAction で `G4AnalysisManager::GetFileName()` が空のときだけ行う。名前は `.root` 付きで渡す。GPS のエネルギーは `G4GeneralParticleSource::GetCurrentSource()->GetEneDist()` の `GetEnergyDisType()` と `GetMonoEnergy()` から取る
 - Serial なので `SetNtupleMerging` は不要

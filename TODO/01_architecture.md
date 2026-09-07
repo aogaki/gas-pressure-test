@@ -51,13 +51,14 @@ Stage 2 は Geant4 ではないので普通の CLI (`-i 入力 -v 電圧`) に�
 | `/tpc/gas` | He, Ar, CO2 | Ar | `/run/initialize` より前 |
 | `/tpc/pressure` | 数値 [mbar] (単位は付けない) | 1013.25 | `/run/initialize` より前 |
 | `/tpc/hits` | true, false | false | `/run/beamOn` より前 |
-| `/analysis/setFileName` | 拡張子なしの名前 | 自動命名 | Geant4 組み込み |
+| `/analysis/setFileName` | `.root` まで書いた名前 | 自動命名 | Geant4 組み込み。名前にドットがあると Geant4 が最後のドット以降を拡張子と誤認して落ちるので `.root` を付ける。付け忘れはアプリが補う |
 | `/gps/...` | GPS の全コマンド | alpha, 5.5 MeV, (0, 0, -250 mm), 方向 +z | Geant4 組み込み |
 | `/random/setSeeds` | 整数 2 つ | Geant4 既定 | 再現性が要るなら必ず書く |
 | `/run/initialize`, `/run/beamOn N` | | | |
 
 - 未知のガス名や 0 以下の圧力は G4Exception (FatalException) で終了する
 - 自動命名: `/analysis/setFileName` が無ければ BeginOfRun で `{gas}_{p}mbar_{E}MeV.root` にする。E は GPS のエネルギー分布が Mono のときはその値 [MeV]、それ以外は分布名 (例: `He_200mbar_Lin.root`)。数値は `%g` 相当の最短表記
+- 自動命名でも `.root` を付けた名前を G4AnalysisManager に渡す (同じ理由)
 - `/tpc/hits true` のときだけ `hits` ntuple を作り、ガス内の最大ステップ長を 1 mm に制限する。false のときはステップ制限なしで速く走る。1M イベントのスキャンで hits を書くと数十 GB になるため既定は false
 
 マクロの例:
@@ -140,10 +141,18 @@ ntuple `hits` (1 行 = ガス内でエネルギー付与のあった 1 ステッ
 
 - Stage 2 は `hits` の edep を W 値で電子数に変換して使う
 
+ntuple `run` (1 行だけ。Stage 2 がガスと圧力を知るため)
+
+| 列 | 型 | 意味 |
+|---|---|---|
+| gas | S | `/tpc/gas` の値 |
+| pressure | D | `/tpc/pressure` の値 [mbar] |
+| hits | I | `/tpc/hits` の値 (0/1) |
+
 ## 物理
 
 - G4EmStandardPhysics_option4 + G4StepLimiterPhysics のみ。ハドロン物理と崩壊は入れない (数 MeV α の核反応は無視できる)
-- 生成閾値はデフォルト (0.7 mm)
+- 生成閾値 (production cut) は 10 m。δ 線と蛍光 X 線を独立した飛跡として作らず、α のエネルギー付与をそのステップに留める。5.5 MeV の α が作る δ 線は 3 keV 以下で、200 mbar でも飛程 1 mm 未満なので 1 mm 刻みの hits には影響しない。検証で hits の行の 85 % が δ 線 (付与エネルギーは 9 %) だったため、ファイルサイズと速度のためにこうした
 - Serial run manager。同じマクロ (同じシード) なら同じ結果になること
 
 ## 開発の進め方

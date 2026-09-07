@@ -1,7 +1,7 @@
 # 03 Stage 2: 電離電子のドリフト (Garfield++)
 
 前提: TODO/01_architecture.md, TODO/02_stage1_alpha_range.md。Stage 1 を `/tpc/hits true` で走らせた ROOT ファイルを入力にする。
-状態: 設計案。Stage 1 の検証後に着手する。
+状態: 発注 (2026-09-07)。Stage 1 は検証済み (`run` ntuple あり)。
 
 ## ゴール
 
@@ -15,7 +15,8 @@ drift-electrons -i Ar_200mbar_5.5MeV.root -v 2000
 
 - 電場は一様。E = V / 200 mm、向きは +y。読み出し面 (y = -100 mm) を高電位、カソード (y = +100 mm) を低電位にし、電子は -y に走る。`-v` は電極間電圧の絶対値 [V]
 - ガスは MediumMagboltz。組成は Stage 1 と同じ単一ガス、圧力は Stage 1 と同じ値を Torr に換算 (1 mbar = 0.750062 Torr)、温度 293.15 K
-- 輸送パラメータ (ドリフト速度、拡散係数) は Magboltz で計算する。電場は 1 点なので、その E だけのテーブルを生成し `gasfiles/{gas}_{p}mbar_{E}Vcm.gas` にキャッシュする。あれば読む、無ければ生成 (ncoll = 10 で 1 分程度)
+- 輸送パラメータ (ドリフト速度、拡散係数) は Magboltz で計算する。電場は 1 点なので、その E だけのテーブル (`SetFieldGrid(E, E, 1, false)`) を生成し `{cachedir}/{gas}_{p}mbar_{E}Vcm.gas` にキャッシュする。あれば `LoadGasFile`、無ければ `GenerateGasTable(10)` して `WriteGasFile` (1 分程度)。cachedir は `-c` で指定、既定はカレントディレクトリの `gasfiles`。1 点のテーブルで AvalancheMC が動かない場合は 3 点 (0.9E, E, 1.1E) にして最終報告に書く
+- Garfield++ の単位は cm, ns, V, Torr。座標は Stage 1 と同じ (中心原点、y が鉛直、読み出し面 y = -10 cm)
 - 電子数: ヒットごとに n = edep / W。揺らぎは σ = sqrt(F n) のガウスで丸める。W と F は Magboltz が持つ値を使う
 - ドリフトは AvalancheMC。拡散あり、距離ステップ 1 mm。一様電場なので解析的に書けるが、Garfield++ を使う方針 (plan の議論) と、将来の非一様電場 (フィールドケージ、GEM) への拡張性を優先する
 - 幾何は GeometrySimple + SolidBox (中心原点、半幅 100, 100, 250 mm)。ComponentConstant に medium と電場を設定し、Sensor の領域を箱に合わせる。底面に達した電子は medium の外に出て止まる (status = StatusLeftDriftMedium または StatusLeftDriftArea)
@@ -38,12 +39,13 @@ Stage 2 がガス名と圧力を知る必要がある。ファイル名から読
 ## CLI
 
 ```
-drift-electrons -i <input.root> -v <volt> [-f <fraction>] [-n <maxEvents>] [-h]
+drift-electrons -i <input.root> -v <volt> [-f <fraction>] [-n <maxEvents>] [-c <cachedir>] [-h]
 ```
 
 - `-i`, `-v` は必須。欠けていれば usage を stderr に出して終了コード 1
 - `-f` の既定は 1 (全電子)。0 < f ≤ 1
 - `-n` を指定するとその数のイベントだけ処理する (試運転用)
+- `-c` はガステーブルのキャッシュディレクトリ。既定 `gasfiles`。無ければ作る
 - 出力名は入力名の `.root` の前に `_{V}V` を付ける。数値は `%g`
 - 入力に `hits` が無ければ終了コード 1
 
@@ -124,8 +126,8 @@ Stage 1 を Ar 200 mbar 5.5 MeV `/tpc/hits true` で 10 イベント走らせ、
 
 ## 実装タスク (TDD の順)
 
-1. Stage 1 に `run` ntuple を追加 (TODO/02 の追加タスク)
-2. CMake に Garfield++ (`find_package(Garfield)`) と ROOT (`find_package(ROOT)`) を追加。Stage 2 だけがリンクする
+1. (済) Stage 1 に `run` ntuple を追加
+2. CMake に Garfield++ (`find_package(Garfield)`, `CMAKE_PREFIX_PATH=/opt/Garfield`, ターゲット `Garfield::Garfield`) と ROOT (`find_package(ROOT)`, `ROOT::RIO ROOT::Tree`) を追加。Stage 2 のターゲット (`drift-electrons` と そのライブラリ) だけがリンクする。Stage 1 のターゲットは変えない
 3. 純関数: CLI、出力名、E、換算、電子数サンプリング
 4. ガス: MediumMagboltz の生成とキャッシュ
 5. 幾何・センサー・AvalancheMC で 1 電子をドリフト (AT2-2)

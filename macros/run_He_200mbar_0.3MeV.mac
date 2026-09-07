@@ -5,4 +5,5 @@
 /run/initialize
 /gps/energy 0.3 MeV
 /random/setSeeds 1 1
+# /analysis/compression 6   # zlib level, default 1
 /run/beamOn 1000000

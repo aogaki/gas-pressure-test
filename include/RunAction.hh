@@ -21,9 +21,14 @@ class RunAction : public G4UserRunAction {
   // "5.5" for a mono-energetic source, otherwise the distribution name.
   G4String EnergyTag() const;
   void CreateNtuples();
+  // Writes the single row of the "run" ntuple (gas, pressure, hits).
+  void WriteRunNtuple();
 
   const TpcConfig& fConfig;
   DetectorConstruction& fDetector;
   PrimaryGeneratorAction& fGenerator;
   G4bool fNtuplesCreated = false;
+  // Set by CreateNtuples() to the id CreateNtuple("run", ...) returned: it
+  // shifts by one when /tpc/hits adds the "hits" ntuple before it.
+  G4int fRunNtupleId = -1;
 };

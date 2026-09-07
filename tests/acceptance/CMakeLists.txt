@@ -24,15 +24,19 @@ endfunction()
 # --- AT-1 startup and file naming ------------------------------------------
 acceptance_run(AT-1_default_run at1_default at1_default.mac)
 acceptance_check(AT-1_default_check at1_default AT-1_default_run
-                 [[check_events.C("Ar_200mbar_5.5MeV.root",10,0)]])
+                 [[check_events.C("Ar_200mbar_5.5MeV.root",10,0,"Ar",200)]])
 
 acceptance_run(AT-1_hits_run at1_hits at1_hits.mac)
 acceptance_check(AT-1_hits_check at1_hits AT-1_hits_run
-                 [[check_events.C("Ar_200mbar_5.5MeV.root",10,1)]])
+                 [[check_events.C("Ar_200mbar_5.5MeV.root",10,1,"Ar",200)]])
 
 acceptance_run(AT-1_custom_run at1_custom at1_custom.mac)
 acceptance_check(AT-1_custom_check at1_custom AT-1_custom_run
-                 [[check_events.C("custom.root",10,0)]])
+                 [[check_events.C("custom.root",10,0,"Ar",200)]])
+
+acceptance_run(AT-1_dotname_run at1_dotname at1_dotname.mac)
+acceptance_check(AT-1_dotname_check at1_dotname AT-1_dotname_run
+                 [[check_events.C("He_200mbar_0.3MeV.root",10,0,"He",200)]])
 
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/at1_noargs)
 add_test(NAME AT-1_no_args

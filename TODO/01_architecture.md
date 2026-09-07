@@ -149,6 +149,8 @@ ntuple `run` (1 行だけ。Stage 2 がガスと圧力を知るため)
 | pressure | D | `/tpc/pressure` の値 [mbar] |
 | hits | I | `/tpc/hits` の値 (0/1) |
 
+`run` は `/run/beamOn` ごとに 1 行書かれる。1 マクロにつき `/run/beamOn` は 1 回だけにする (複数回書くと `events` も混ざる)。
+
 ## 物理
 
 - G4EmStandardPhysics_option4 + G4StepLimiterPhysics のみ。ハドロン物理と崩壊は入れない (数 MeV α の核反応は無視できる)

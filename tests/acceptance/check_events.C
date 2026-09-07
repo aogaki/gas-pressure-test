@@ -1,8 +1,11 @@
 #include "AtCheck.h"
 
-// AT-1: entry count, presence of the hits ntuple and the primary defaults.
-// hitsMode 0: the hits ntuple must be absent, 1: it must hold at least one row.
-void check_events(const char* fileName, int nEvents, int hitsMode) {
+// AT-1: entry count, presence of the hits ntuple, the primary defaults and
+// the run ntuple. hitsMode 0: the hits ntuple must be absent and run.hits
+// must be 0, 1: hits must hold at least one row and run.hits must be 1.
+// gas/pressureMbar are the expected run.gas and run.pressure values.
+void check_events(const char* fileName, int nEvents, int hitsMode,
+                  const char* gas, double pressureMbar) {
   TFile* file = AtOpen(fileName);
   TTree* events = AtTree(file, "events");
   AtCheck(events->GetEntries() == nEvents, Form("events has %lld entries (expected %d)",
@@ -30,5 +33,20 @@ void check_events(const char* fileName, int nEvents, int hitsMode) {
       AtCheck(hits->GetEntries() >= 1, Form("hits has %lld entries", hits->GetEntries()));
     }
   }
+
+  TTree* run = AtTree(file, "run");
+  AtCheck(run->GetEntries() == 1,
+          Form("run has %lld entries (expected 1)", run->GetEntries()));
+  char runGas[64] = {0};
+  double runPressure = 0.;
+  int runHits = -1;
+  run->SetBranchAddress("gas", runGas);
+  run->SetBranchAddress("pressure", &runPressure);
+  run->SetBranchAddress("hits", &runHits);
+  run->GetEntry(0);
+  AtCheck(TString(runGas) == TString(gas),
+          Form("run.gas = '%s' (expected '%s')", runGas, gas));
+  AtCheckNear(runPressure, pressureMbar, 1e-9, "run.pressure [mbar]");
+  AtCheck(runHits == hitsMode, Form("run.hits = %d (expected %d)", runHits, hitsMode));
   AtReport();
 }

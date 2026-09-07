@@ -39,4 +39,9 @@ enum HitColumn {
   kHitStepLength
 };
 
+// The "run" ntuple id is not fixed: it comes right after "events" and, when
+// /tpc/hits is on, "hits" too, so its CreateNtuple() return value shifts.
+// Only the column order within it is fixed.
+enum RunColumn { kRunGas = 0, kRunPressure, kRunHits };
+
 }  // namespace ntuple

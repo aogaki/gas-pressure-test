@@ -1,0 +1,9 @@
+# AT-1: /analysis/setFileName with dots and no extension must still recover
+# to a ".root" file (Geant4 would otherwise mistake "3MeV" for the extension).
+/tpc/gas He
+/tpc/pressure 200
+/tpc/hits false
+/run/initialize
+/analysis/setFileName He_200mbar_0.3MeV
+/random/setSeeds 1 1
+/run/beamOn 10

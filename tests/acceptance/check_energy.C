@@ -39,6 +39,6 @@ void check_energy(const char* fileName) {
   AtCheck(mismatched == 0,
           Form("sum(hits.edep) == events.edepTotal for every event "
                "(%d mismatches, worst %.3g MeV)", mismatched, worst));
-  AtCheckRange(sumEdep / sumE0, 0.995, 1.0, "mean edepTotal / mean e0");
+  AtCheckRange(sumEdep / sumE0, 0.999, 1.0, "mean edepTotal / mean e0");
   AtReport();
 }

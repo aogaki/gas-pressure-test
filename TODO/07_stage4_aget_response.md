@@ -95,10 +95,18 @@ aget-shaper -i <stage3_readout.root> [-t <peaking ns>] [-r <range fC>] [-g <gain
 - Stage 1: CO2 100 mbar、2 MeV、hits true、`/gps/direction 0 0.5 0.866` (ドリフト方向に 30° 傾ける)、10 イベント。CSDA 飛程 72.8 mm なのでパッド面に収まり、ドリフト方向に 36 mm 広がる
 - Stage 2: `-v 1200 -f 0.1` (analyzeUVW.C の定数と同じ条件。v_drift = 0.434 cm/µs)。Stage 3: `-w 20` (ドリフト 10〜13.6 cm は 23〜31 µs で、窓は 20 µs から)。Stage 4: 既定値
 - analyzeUVW.C と makeTracks.C を走らせ、`tracks` の 10 イベント中 8 以上が ok = 1、その length の平均が 72.8 mm の ±15 % 以内、ドリフト方向の方向余弦の絶対値の平均が 0.5 の ±0.1
-- 解析マクロと channel_map.csv は tpcdaq-rs から `external/tpcdaq-macros/` にコピーして使う (出典と日付、md5 を NOTICE に書く)。コピーの可否は要確認
+- 解析マクロは tpcdaq-rs から `external/tpcdaq-macros/` にコピー済み (出典と md5 は NOTICE.md)。channel_map.csv と geometry/pads.csv は実機ジオメトリ由来なので git に入れない (gitignore 済み)。テストは `scripts/make_channel_map.py` で pads.csv から作った channel_map.csv を作業ディレクトリに置いて走らせる
+
+## ジオメトリ由来ファイルの扱い (2026-09-07 決定)
+
+- `geometry/pads.csv` と `channel_map.csv` は実機のジオメトリ (.dat) から作る派生物で、tpcdaq-rs でも gitignore されている。このリポジトリでも git に入れない。手元のファイルはそのまま使う
+- 生成手順: `external/tpcdaq-macros/make_pads.py <geometry.dat> geometry/pads.csv [d_mm] [channel_map.csv]` で pads.csv、`scripts/make_channel_map.py geometry/pads.csv <out.csv>` で channel_map.csv
+- channel_map.csv の列は `aget,raw_channel,view(0=U 1=V 2=W),strip,s_mm`。s_mm は検出器座標でのストリップ位置 = ストリップ上の任意のパッド重心 (x_det, y_det) とピッチ方向単位ベクトル p の内積。x_det = x_sim、y_det = 48.930 − (z_sim + 250 − d)。ストリップ方向は U 90°、V −30°、W +30° で、p_U = unit(−(u_W + u_V))、p_V = unit(u_U + u_W)、p_W = unit(u_V − u_U) (make_pads.py と同じ定義)。手元の実物 channel_map.csv と 256 行すべて 10^−3 mm 以内で一致することを確認する (実物があるときだけ走る単体テスト)
+- pads.csv が無い環境でもビルドと Stage 1〜2 のテストは通ること。Stage 3〜4 の受け入れテストと 13,010 パッドの単体テストは CMake で `if(EXISTS geometry/pads.csv)` のときだけ登録し、無ければ警告を出す。PadMap の基本の単体テストは tests/unit に置いた小さな合成 CSV (数枚の菱形) で行う
 
 ## 実装タスク (TDD の順)
 
+0. 上記「ジオメトリ由来ファイルの扱い」: `scripts/make_channel_map.py`、pads.csv が無いときのテストの条件登録、合成 CSV による PadMap 単体テスト
 1. 整形関数と離散畳み込み (純関数)。AT4-2
 2. CLI、出力名、ADC 変換、`raw` ツリーの書き出し。AT4-1、AT4-3
 3. tpcdaq-rs のマクロを取り込み、AT4-4
@@ -107,6 +115,6 @@ aget-shaper -i <stage3_readout.root> [-t <peaking ns>] [-r <range fC>] [-g <gain
 
 ## 相談したいこと
 
-- α 線源の核種とエネルギー、線源の位置と向き (実データの飛跡は検出器を突き抜けるとのこと)。較正と閉ループ試験の条件を実データに合わせるため
-- tpcdaq-rs のマクロをこのリポジトリ (public) にコピーしてよいか
-- ピーキング時間 223 ns のパルサー波形が 1 チャンネル分あれば、整形の式を実測に合わせられる
+- (済) α 線源は 241Am (主線 5.486 MeV、5.443 MeV が 13 %)。線源の位置と向きは未確認 (実データの飛跡は検出器を突き抜ける)
+- (済) tpcdaq-rs のマクロのコピーは OK。channel_map.csv と pads.csv は git に入れない
+- (済) パルサー波形は無い。macros/data の 2 ラン (2026-09-01: 20,724 イベント、1 イベントに 100〜150 チャンネル、2026-09-02: 12,130 イベント) が 241Am の α のデータで、較正はこれに対して行う。パルスは α の電荷到達の広がり (µs 幅) と整形の畳み込みなので、整形の式は経験式のまま使う

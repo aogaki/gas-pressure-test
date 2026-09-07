@@ -5,5 +5,5 @@ build/
 scans/
 gasfiles/
 *.gas
-geometry/pads.csv
+geometry/*.csv
 external/tpcdaq-macros/channel_map.csv

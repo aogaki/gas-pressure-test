@@ -48,6 +48,17 @@ bool ReadFile(const char* path, Row& row, double zMaxMm, double xMaxMm) {
     std::fprintf(stderr, "range_summary: cannot open %s\n", path);
     return false;
   }
+  // Stage 2 and Stage 3 clone "run" and "events" into their own output, so a
+  // scan directory that has been drifted holds several files per Stage 1 run.
+  // Their own ntuples tell them apart: "electrons" is Stage 2, "waveforms"
+  // Stage 3.
+  if (file->Get("electrons") != nullptr || file->Get("waveforms") != nullptr) {
+    std::fprintf(stderr, "range_summary: %s is not a Stage 1 file, skipped\n",
+                 path);
+    delete file;
+    return false;
+  }
+
   TTree* run = dynamic_cast<TTree*>(file->Get("run"));
   TTree* events = dynamic_cast<TTree*>(file->Get("events"));
   if (run == nullptr || events == nullptr) {

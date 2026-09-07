@@ -5,10 +5,22 @@ set(AT_CHECKS ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Runs the application on one macro in its own working directory, so that the
 # output files of the different tests never collide.
+#
+# The run deletes the ROOT files it is about to write before it starts. CTest's
+# DEPENDS only orders the tests, it does not skip a check whose run failed, so
+# without this a check (and every "test -f <name>" naming test) would pass on
+# the output of an earlier build. The optional extra arguments name the files
+# to delete; without them every *.root of the directory goes, which is only
+# wrong where several runs share one working directory.
 function(acceptance_run test workdir macro)
   file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${workdir})
+  set(outputs "./*.root")
+  if(ARGN)
+    string(REPLACE ";" " " outputs "${ARGN}")
+  endif()
   add_test(NAME ${test}
-           COMMAND $<TARGET_FILE:gas-pressure-test> ${AT_MACROS}/${macro}
+           COMMAND sh -c "rm -f ${outputs} && exec \"$0\" \"$1\""
+                   $<TARGET_FILE:gas-pressure-test> ${AT_MACROS}/${macro}
            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${workdir})
   set_tests_properties(${test} PROPERTIES LABELS acceptance)
 endfunction()
@@ -105,9 +117,11 @@ acceptance_check(AT-6_check at6 AT-6_run
                  [[check_energy.C("Ar_1013.25mbar_5.5MeV.root")]])
 
 # --- AT-7 reproducibility ---------------------------------------------------
-acceptance_run(AT-7_run1 at7 at7_run1.mac)
-acceptance_run(AT-7_run2 at7 at7_run2.mac)
-acceptance_run(AT-7_run3 at7 at7_run3.mac)
+# The three runs share one working directory, so each deletes only its own
+# output; "rm -f ./*.root" would race with the others under ctest -j.
+acceptance_run(AT-7_run1 at7 at7_run1.mac at7_run1.root)
+acceptance_run(AT-7_run2 at7 at7_run2.mac at7_run2.root)
+acceptance_run(AT-7_run3 at7 at7_run3.mac at7_run3.root)
 acceptance_check(AT-7_same_check at7 "AT-7_run1;AT-7_run2"
                  [[check_repro.C("at7_run1.root","at7_run2.root",true)]])
 acceptance_check(AT-7_seed_check at7 "AT-7_run1;AT-7_run3"
@@ -123,8 +137,9 @@ acceptance_run(AT-9_run at9 at9.mac)
 acceptance_check(AT-9_check at9 AT-9_run [[check_hits.C("Ar_200mbar_5.5MeV.root",1.0)]])
 
 # --- AT-10 hits must not change the physics ---------------------------------
-acceptance_run(AT-10_false_run at10 at10_false.mac)
-acceptance_run(AT-10_true_run at10 at10_true.mac)
+# Both runs share one working directory (see AT-7 above).
+acceptance_run(AT-10_false_run at10 at10_false.mac at10_false.root)
+acceptance_run(AT-10_true_run at10 at10_true.mac at10_true.root)
 acceptance_check(AT-10_check at10 "AT-10_false_run;AT-10_true_run"
                  [[check_meanclose.C("at10_false.root","at10_true.root",1)]])
 
@@ -190,8 +205,8 @@ set_tests_properties(AT-S1_check PROPERTIES LABELS acceptance DEPENDS AT-S1_run)
 # --- AT-S2 scan.sh real run, -j 2 -------------------------------------------
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/atS2)
 add_test(NAME AT-S2_run
-         COMMAND ${SCAN_SH} -o . -g "He" -p "200" -e "0.3 1.0" -n 10 -j 2
-                 -x $<TARGET_FILE:gas-pressure-test>
+         COMMAND sh -c [=[rm -f ./*.root && exec "$0" -o . -g He -p 200 -e "0.3 1.0" -n 10 -j 2 -x "$1"]=]
+                 ${SCAN_SH} $<TARGET_FILE:gas-pressure-test>
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/atS2)
 set_tests_properties(AT-S2_run PROPERTIES LABELS acceptance)
 
@@ -214,6 +229,19 @@ add_test(NAME AT-S3_run
 set_tests_properties(AT-S3_run PROPERTIES LABELS acceptance DEPENDS AT-S2_run)
 
 acceptance_check(AT-S3_check atS2 AT-S3_run [[check_scan_summary.C("summary.csv")]])
+
+# The same directory judged against the readout board of TODO/06 instead of the
+# whole gas volume (the zMaxMm/xMaxMm arguments). The 0.3 MeV alphas stop
+# before z = -143.9 mm, the 1.0 MeV ones fly past it.
+set(AT_S3_PADS_CALL "${RANGE_SUMMARY}(\".\",-143.9,53.75)")
+add_test(NAME AT-S3_pads_run
+         COMMAND sh -c [=[rm -f summary_pads.csv && exec "$0" -l -b -q "$1" > summary_pads.csv]=]
+                 ${ROOT_EXECUTABLE} "${AT_S3_PADS_CALL}"
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/atS2)
+set_tests_properties(AT-S3_pads_run PROPERTIES LABELS acceptance DEPENDS AT-S2_run)
+
+acceptance_check(AT-S3_pads_check atS2 AT-S3_pads_run
+                 [[check_scan_summary.C("summary_pads.csv",1,0)]])
 
 # --- AT-S4 scan.sh with a non-existent executable exits non-zero -----------
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/atS4)
@@ -252,7 +280,7 @@ add_test(NAME AT2-1_no_hits
                  $<TARGET_FILE:drift-electrons> ${S2_CACHE}
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s2_nohits)
 set_tests_properties(AT2-1_no_hits PROPERTIES LABELS acceptance
-                     DEPENDS AT2-1_nohits_run)
+                     DEPENDS "AT2-1_nohits_run;AT2-4_cache")
 
 # --- AT2-4 the gas table cache ----------------------------------------------
 # Runs twice on one event with almost no electrons: the first run makes the
@@ -261,6 +289,7 @@ acceptance_run(AT2-4_stage1 s2_cache drift_stage1.mac)
 add_test(NAME AT2-4_cache
          COMMAND sh -c [=[
 set -e
+rm -f Ar_200mbar_5.5MeV_2000V.root
 rm -rf "$1"
 start=$(date +%s)
 "$0" -i Ar_200mbar_5.5MeV.root -v 2000 -f 0.001 -n 1 -c "$1" > generate.log 2>&1
@@ -297,8 +326,8 @@ set_tests_properties(AT2-2_drift PROPERTIES LABELS acceptance
 # --- AT2-3 end to end -------------------------------------------------------
 acceptance_run(AT2-3_stage1 s2_end2end drift_stage1.mac)
 add_test(NAME AT2-3_run
-         COMMAND $<TARGET_FILE:drift-electrons>
-                 -i Ar_200mbar_5.5MeV.root -v 2000 -f 0.1 -c ${S2_CACHE}
+         COMMAND sh -c [=[rm -f Ar_200mbar_5.5MeV_2000V.root && exec "$0" -i Ar_200mbar_5.5MeV.root -v 2000 -f 0.1 -c "$1"]=]
+                 $<TARGET_FILE:drift-electrons> ${S2_CACHE}
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s2_end2end)
 set_tests_properties(AT2-3_run PROPERTIES LABELS acceptance
                      DEPENDS "AT2-3_stage1;AT2-4_cache" TIMEOUT 900)
@@ -311,9 +340,8 @@ acceptance_check(AT2-3_check s2_end2end AT2-3_run
 # directory before it makes the argon table.
 acceptance_run(AT-M3_stage1 s2_mixture atM3_stage1.mac)
 add_test(NAME AT-M3_run
-         COMMAND $<TARGET_FILE:drift-electrons>
-                 -i He-90-CO2-10_200mbar_0.3MeV.root -v 2000 -f 0.1
-                 -c ${S2_CACHE}
+         COMMAND sh -c [=[rm -f He-90-CO2-10_200mbar_0.3MeV_2000V.root && exec "$0" -i He-90-CO2-10_200mbar_0.3MeV.root -v 2000 -f 0.1 -c "$1"]=]
+                 $<TARGET_FILE:drift-electrons> ${S2_CACHE}
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s2_mixture)
 set_tests_properties(AT-M3_run PROPERTIES LABELS acceptance
                      DEPENDS "AT-M3_stage1;AT2-4_cache" TIMEOUT 900)
@@ -350,24 +378,34 @@ set_tests_properties(AT-D1_check PROPERTIES LABELS acceptance DEPENDS AT-D1_run)
 set(DRIFT_SCAN_SH ${PROJECT_SOURCE_DIR}/scripts/drift_scan.sh)
 
 # Dry run: one command per (Stage 1 file, voltage), and nothing is executed.
-# The Stage 2 output of the run below is skipped because its name ends in "V",
-# the Stage 3 output because it ends in "_readout".
+# Two Stage 1 files are laid out, one of them with a blank in its name, next to
+# the outputs of every later stage, which have to be skipped: "_1000V" (Stage
+# 2), "_readout" (Stage 3), "_raw" (Stage 4) and "_uvw"/"_tracks" (the analysis
+# macros of external/tpcdaq-macros).
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/atD2_dry)
 add_test(NAME AT-D2_dry
          COMMAND sh -c [=[
 set -e
 rm -f ./*.root
-touch Ar_200mbar_5.5MeV.root Ar_200mbar_5.5MeV_1000V.root \
-      Ar_200mbar_5.5MeV_1000V_readout.root
+rm -rf logs .failed
+touch Ar_200mbar_5.5MeV.root "Ar 200mbar_5.5MeV.root" \
+      Ar_200mbar_5.5MeV_1000V.root Ar_200mbar_5.5MeV_1000V_readout.root \
+      Ar_200mbar_5.5MeV_1000V_raw.root Ar_200mbar_5.5MeV_1000V_uvw.root \
+      Ar_200mbar_5.5MeV_1000V_tracks.root
 out=$("$0" -d -o . -v "1000 2000" -x /no/such/exe 2>&1 >/dev/null)
 printf '%s\n' "$out"
-# One "(cd . && ..." line per (Stage 1 file, voltage); the _1000V.root file is
-# a Stage 2 output and the _readout.root file a Stage 3 one, so neither may be
-# picked up again.
-test "$(printf '%s\n' "$out" | grep -c '^(cd ')" = 2
-test "$(printf '%s\n' "$out" | grep -c -- '-v 2000')" = 1
-test "$(printf '%s\n' "$out" | grep -c -- 'readout')" = 0
+# One "(cd . && ..." line per (Stage 1 file, voltage): two files, two voltages.
+test "$(printf '%s\n' "$out" | grep -c '^(cd ')" = 4
+test "$(printf '%s\n' "$out" | grep -c -- '-v 1000 ')" = 2
+test "$(printf '%s\n' "$out" | grep -c -- '-v 2000 ')" = 2
+# The blank in the name must not shift the arguments: the name stays one -i
+# operand and the voltage still follows -v directly (checked just above).
+test "$(printf '%s\n' "$out" | grep -c -F -- "-i 'Ar 200mbar_5.5MeV.root'")" = 2
+test "$(printf '%s\n' "$out" | grep -c -E -- '_readout|_raw|_uvw|_tracks')" = 0
 test ! -f Ar_200mbar_5.5MeV_2000V.root
+# A dry run has no side effects.
+test ! -d logs
+test ! -e .failed
 ]=]
                  ${DRIFT_SCAN_SH}
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/atD2_dry)
@@ -376,8 +414,8 @@ set_tests_properties(AT-D2_dry PROPERTIES LABELS acceptance)
 # Real run on one Stage 1 file, reusing the argon table AT2-4 has cached.
 acceptance_run(AT-D2_stage1 atD2 drift_stage1.mac)
 add_test(NAME AT-D2_run
-         COMMAND ${DRIFT_SCAN_SH} -o . -v "2000" -f 0.01 -j 2 -c ${S2_CACHE}
-                 -x $<TARGET_FILE:drift-electrons>
+         COMMAND sh -c [=[rm -f Ar_200mbar_5.5MeV_2000V.root && exec "$0" -o . -v 2000 -f 0.01 -j 2 -c "$1" -x "$2"]=]
+                 ${DRIFT_SCAN_SH} ${S2_CACHE} $<TARGET_FILE:drift-electrons>
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/atD2)
 set_tests_properties(AT-D2_run PROPERTIES LABELS acceptance
                      DEPENDS "AT-D2_stage1;AT2-4_cache" TIMEOUT 900)
@@ -388,6 +426,22 @@ add_test(NAME AT-D2_log
          COMMAND sh -c [=[test -s logs/Ar_200mbar_5.5MeV_2000V.log]=]
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/atD2)
 set_tests_properties(AT-D2_log PROPERTIES LABELS acceptance DEPENDS AT-D2_run)
+
+# range_summary.C must summarise the Stage 1 file only. This directory holds
+# the Stage 2 output next to it, and Stage 2 carries the "run" and "events"
+# ntuples over, so without the skip the same run would be counted twice.
+add_test(NAME AT-D2_summary
+         COMMAND sh -c [=[
+set -e
+rm -f summary.csv
+"$0" -l -b -q "$1" > summary.csv
+grep -q '^gas,pressure_mbar' summary.csv
+test "$(grep -c '^Ar,' summary.csv)" = 1
+]=]
+                 ${ROOT_EXECUTABLE} "${RANGE_SUMMARY}(\".\")"
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/atD2)
+set_tests_properties(AT-D2_summary PROPERTIES LABELS acceptance
+                     DEPENDS AT-D2_run)
 
 # ============================================================================
 # Stage 4: aget-shaper, the tests that need no pad map (TODO/07)
@@ -449,15 +503,15 @@ set_tests_properties(AT3-1_no_electrons PROPERTIES LABELS acceptance
 acceptance_run(AT3-3_stage1 s3_end2end at3_stage1.mac)
 
 add_test(NAME AT3-3_stage2
-         COMMAND $<TARGET_FILE:drift-electrons>
-                 -i He_200mbar_0.3MeV.root -v 2000 -f 0.1 -c ${S2_CACHE}
+         COMMAND sh -c [=[rm -f He_200mbar_0.3MeV_2000V.root && exec "$0" -i He_200mbar_0.3MeV.root -v 2000 -f 0.1 -c "$1"]=]
+                 $<TARGET_FILE:drift-electrons> ${S2_CACHE}
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s3_end2end)
 set_tests_properties(AT3-3_stage2 PROPERTIES LABELS acceptance
                      DEPENDS "AT3-3_stage1;AT2-4_cache" TIMEOUT 900)
 
 add_test(NAME AT3-3_run
-         COMMAND $<TARGET_FILE:channel-response>
-                 -i He_200mbar_0.3MeV_2000V.root -p ${PADS_CSV} -w 0
+         COMMAND sh -c [=[rm -f He_200mbar_0.3MeV_2000V_readout.root && exec "$0" -i He_200mbar_0.3MeV_2000V.root -p "$1" -w 0]=]
+                 $<TARGET_FILE:channel-response> ${PADS_CSV}
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s3_end2end)
 set_tests_properties(AT3-3_run PROPERTIES LABELS acceptance
                      DEPENDS AT3-3_stage2)
@@ -482,6 +536,7 @@ file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s3_window)
 add_test(NAME AT3-4_run
          COMMAND sh -c [=[
 set -e
+rm -f ./*.root
 cp ../s3_end2end/He_200mbar_0.3MeV_2000V.root .
 "$0" -i He_200mbar_0.3MeV_2000V.root -p "$1" -w 30
 ]=]
@@ -503,16 +558,18 @@ set(MAKE_CHANNEL_MAP ${PROJECT_SOURCE_DIR}/scripts/make_channel_map.py)
 # -g is pinned here (and in AT4-4 below): these tests check the shaper itself
 # at a known gain, not the calibrated default, which TODO/08 moved to 3600.
 add_test(NAME AT4-3_run
-         COMMAND $<TARGET_FILE:aget-shaper>
-                 -i He_200mbar_0.3MeV_2000V_readout.root -g 1000
+         COMMAND sh -c [=[rm -f He_200mbar_0.3MeV_2000V_raw.root && exec "$0" -i He_200mbar_0.3MeV_2000V_readout.root -g 1000]=]
+                 $<TARGET_FILE:aget-shaper>
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s3_end2end)
 set_tests_properties(AT4-3_run PROPERTIES LABELS acceptance DEPENDS AT3-3_run)
 
 # The settings of TODO/07: 223 ns peaking, 120 fC range, gain 1000 (pinned on
 # the command line above), pedestal 450, noise sigma 6. A pulse of more than 100 counts has to be there, and
-# every pulse whose area is above 3000 counts (where the noise of the summed
-# cells is far below 5 %) has to carry the charge of Stage 3.
-set(AT4_3_CALL "check_raw.C(\"He_200mbar_0.3MeV_2000V_raw.root\",\"He_200mbar_0.3MeV_2000V_readout.root\",10,450,6,1000,120,223,100,3000)")
+# every pulse whose area is above 5000 counts (where the noise of the summed
+# cells is at least 5 sigma below the 5 % allowance) has to carry the charge of
+# Stage 3. At 3000 the smallest margin was 2.9 sigma, which fails for about one
+# random seed in 24.
+set(AT4_3_CALL "check_raw.C(\"He_200mbar_0.3MeV_2000V_raw.root\",\"He_200mbar_0.3MeV_2000V_readout.root\",10,450,6,1000,120,223,100,5000)")
 acceptance_check(AT4-3_check s3_end2end AT4-3_run "${AT4_3_CALL}")
 
 add_test(NAME AT4-1_output_name
@@ -524,8 +581,8 @@ set_tests_properties(AT4-1_output_name PROPERTIES LABELS acceptance
 # An event whose time window caught no electron is written all the same, with
 # pedestal and noise only: AT3-4 left ten of them behind in s3_window.
 add_test(NAME AT4-1_empty_run
-         COMMAND $<TARGET_FILE:aget-shaper>
-                 -i He_200mbar_0.3MeV_2000V_readout.root
+         COMMAND sh -c [=[rm -f He_200mbar_0.3MeV_2000V_raw.root && exec "$0" -i He_200mbar_0.3MeV_2000V_readout.root]=]
+                 $<TARGET_FILE:aget-shaper>
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s3_window)
 set_tests_properties(AT4-1_empty_run PROPERTIES LABELS acceptance
                      DEPENDS AT3-4_run)
@@ -539,8 +596,8 @@ acceptance_check(AT4-1_empty_check s3_window AT4-1_empty_run
 acceptance_run(AT4-4_stage1 s4_tracks at4_stage1.mac)
 
 add_test(NAME AT4-4_stage2
-         COMMAND $<TARGET_FILE:drift-electrons>
-                 -i CO2_100mbar_2MeV.root -v 1200 -f 0.1 -c ${S2_CACHE}
+         COMMAND sh -c [=[rm -f CO2_100mbar_2MeV_1200V.root && exec "$0" -i CO2_100mbar_2MeV.root -v 1200 -f 0.1 -c "$1"]=]
+                 $<TARGET_FILE:drift-electrons> ${S2_CACHE}
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s4_tracks)
 set_tests_properties(AT4-4_stage2 PROPERTIES LABELS acceptance
                      DEPENDS "AT4-4_stage1;AT2-4_cache" TIMEOUT 900)
@@ -548,15 +605,15 @@ set_tests_properties(AT4-4_stage2 PROPERTIES LABELS acceptance
 # The electrons arrive 23 to 31 us after the alpha, so the 20.48 us window
 # opens at 20 us.
 add_test(NAME AT4-4_stage3
-         COMMAND $<TARGET_FILE:channel-response>
-                 -i CO2_100mbar_2MeV_1200V.root -p ${PADS_CSV} -w 20
+         COMMAND sh -c [=[rm -f CO2_100mbar_2MeV_1200V_readout.root && exec "$0" -i CO2_100mbar_2MeV_1200V.root -p "$1" -w 20]=]
+                 $<TARGET_FILE:channel-response> ${PADS_CSV}
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s4_tracks)
 set_tests_properties(AT4-4_stage3 PROPERTIES LABELS acceptance
                      DEPENDS AT4-4_stage2)
 
 add_test(NAME AT4-4_run
-         COMMAND $<TARGET_FILE:aget-shaper>
-                 -i CO2_100mbar_2MeV_1200V_readout.root -g 1000
+         COMMAND sh -c [=[rm -f CO2_100mbar_2MeV_1200V_raw.root && exec "$0" -i CO2_100mbar_2MeV_1200V_readout.root -g 1000]=]
+                 $<TARGET_FILE:aget-shaper>
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s4_tracks)
 set_tests_properties(AT4-4_run PROPERTIES LABELS acceptance
                      DEPENDS AT4-4_stage3)
@@ -569,14 +626,16 @@ add_test(NAME AT4-4_channel_map
 set_tests_properties(AT4-4_channel_map PROPERTIES LABELS acceptance)
 
 add_test(NAME AT4-4_uvw
-         COMMAND ${ROOT_EXECUTABLE} -l -b -q
+         COMMAND sh -c [=[rm -f CO2_100mbar_2MeV_1200V_uvw.root && exec "$0" -l -b -q "$1"]=]
+                 ${ROOT_EXECUTABLE}
                  "${TPCDAQ_MACROS}/analyzeUVW.C(\"CO2_100mbar_2MeV_1200V_raw.root\")"
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s4_tracks)
 set_tests_properties(AT4-4_uvw PROPERTIES LABELS acceptance
                      DEPENDS "AT4-4_run;AT4-4_channel_map")
 
 add_test(NAME AT4-4_tracks
-         COMMAND ${ROOT_EXECUTABLE} -l -b -q
+         COMMAND sh -c [=[rm -f CO2_100mbar_2MeV_1200V_tracks.root && exec "$0" -l -b -q "$1"]=]
+                 ${ROOT_EXECUTABLE}
                  "${TPCDAQ_MACROS}/makeTracks.C(\"CO2_100mbar_2MeV_1200V_uvw.root\")"
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s4_tracks)
 set_tests_properties(AT4-4_tracks PROPERTIES LABELS acceptance

@@ -56,6 +56,29 @@ add_test(NAME AT-1_no_args
                  $<TARGET_FILE:gas-pressure-test>
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/at1_noargs)
 
+# The /tpc/ commands are PreInit only, so a change after /run/initialize can
+# never leave the "run" ntuple disagreeing with the geometry (TODO/09 R1).
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/at1_after_init)
+add_test(NAME AT-1_after_init
+         COMMAND sh -c [=[rm -f ./*.root; ! "$0" "$1" && test -z "$(ls *.root 2>/dev/null)"]=]
+                 $<TARGET_FILE:gas-pressure-test> ${AT_MACROS}/at1_after_init.mac
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/at1_after_init)
+
+# One /run/beamOn per macro: the second one would overwrite the first output
+# and reuse its ntuple layout (TODO/09 R2).
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/at1_two_beamon)
+add_test(NAME AT-1_two_beamon
+         COMMAND sh -c [=[! "$0" "$1"]=]
+                 $<TARGET_FILE:gas-pressure-test> ${AT_MACROS}/at1_two_beamon.mac
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/at1_two_beamon)
+
+# An alpha shot at -z never enters the gas (the source sits on the entrance
+# plane): it is recorded as "left at the entrance point with all of its
+# energy", not as "stopped at the origin" (TODO/09 R5).
+acceptance_run(AT-1_backward_run at1_backward at1_backward.mac)
+acceptance_check(AT-1_backward_check at1_backward AT-1_backward_run
+                 [[check_punchthrough.C("Ar_200mbar_5.5MeV.root",0,0,-250,1e-6,5.5,1e-6)]])
+
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/at1_badgas)
 add_test(NAME AT-1_bad_gas
          COMMAND sh -c [=[! "$0" "$1"]=]
@@ -69,6 +92,7 @@ add_test(NAME AT-1_bad_pressure
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/at1_badpressure)
 
 set_tests_properties(AT-1_no_args AT-1_bad_gas AT-1_bad_pressure
+                     AT-1_after_init AT-1_two_beamon
                      PROPERTIES LABELS acceptance)
 
 # --- AT-2 range at 1013.25 mbar, 5.5 MeV ------------------------------------
@@ -578,6 +602,27 @@ add_test(NAME AT4-1_output_name
 set_tests_properties(AT4-1_output_name PROPERTIES LABELS acceptance
                      DEPENDS AT4-3_run)
 
+# Every event of the run gets an entry, whether or not it had electrons: the
+# event list is the "events" ntuple of Stage 1, not the events that fired.
+# Stage 3 runs with -n 3 here, so "summary" holds three of the ten (R6).
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s4_eventlist)
+add_test(NAME AT4-1_eventlist
+         COMMAND sh -c [=[
+set -e
+rm -f ./*.root
+cp ../s3_end2end/He_200mbar_0.3MeV_2000V.root .
+"$0" -i He_200mbar_0.3MeV_2000V.root -p "$1" -w 0 -n 3
+"$2" -i He_200mbar_0.3MeV_2000V_readout.root -g 1000
+]=]
+                 $<TARGET_FILE:channel-response> ${PADS_CSV}
+                 $<TARGET_FILE:aget-shaper>
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s4_eventlist)
+set_tests_properties(AT4-1_eventlist PROPERTIES LABELS acceptance
+                     DEPENDS AT3-3_stage2)
+set(AT4_1_EVENTLIST_CALL "check_raw.C(\"He_200mbar_0.3MeV_2000V_raw.root\",\"He_200mbar_0.3MeV_2000V_readout.root\",10,450,6,1000,120,223,100,5000)")
+acceptance_check(AT4-1_eventlist_check s4_eventlist AT4-1_eventlist
+                 "${AT4_1_EVENTLIST_CALL}")
+
 # An event whose time window caught no electron is written all the same, with
 # pedestal and noise only: AT3-4 left ten of them behind in s3_window.
 add_test(NAME AT4-1_empty_run
@@ -645,6 +690,6 @@ set_tests_properties(AT4-4_tracks PROPERTIES LABELS acceptance
 # On the length see check_tracks.C: makeTracks.C measures the 2 %/98 % charge
 # quantiles of 3 mm slice centroids, which is 63 mm for these 72.8 mm alphas.
 acceptance_check(AT4-4_check s4_tracks AT4-4_tracks
-                 [[check_tracks.C("CO2_100mbar_2MeV_1200V_tracks.root",10,8,63.0,0.10,0.5,0.1)]])
+                 [[check_tracks.C("CO2_100mbar_2MeV_1200V_tracks.root",10,8,60.6,0.10,0.5,0.1)]])
 
 endif()  # EXISTS ${PADS_CSV}

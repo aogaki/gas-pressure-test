@@ -1,0 +1,7 @@
+# AT-1: /tpc/gas after /run/initialize, must be refused (TODO/09 R1)
+/tpc/gas Ar
+/tpc/pressure 200
+/run/initialize
+/tpc/gas He
+/random/setSeeds 1 1
+/run/beamOn 10

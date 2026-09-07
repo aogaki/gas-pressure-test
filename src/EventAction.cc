@@ -36,6 +36,18 @@ void EventAction::EndOfEventAction(const G4Event* event) {
       (primary != nullptr) ? primary->GetMomentumDirection() : G4ThreeVector();
   const G4double e0 = (primary != nullptr) ? primary->GetKineticEnergy() : 0.;
 
+  // An alpha that never entered the gas leaves no step to set the end point
+  // with. The source sits on the entrance plane (z = -250 mm), so every -z
+  // direction is such an alpha; recording it as "left at the entrance point
+  // with all of its energy" keeps the range and the contained fraction of
+  // range_summary.C right (TODO/09 R5).
+  if (fTrackLength == 0.) {
+    fEnd = origin;
+    fTEnd = 0.;
+    fEExit = e0;
+    fExited = true;
+  }
+
   auto* analysis = G4AnalysisManager::Instance();
   analysis->FillNtupleIColumn(ntuple::kEvents, ntuple::kEventID,
                               event->GetEventID());

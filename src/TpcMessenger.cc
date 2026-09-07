@@ -2,6 +2,7 @@
 
 #include <stdexcept>
 
+#include "G4ApplicationState.hh"
 #include "G4GenericMessenger.hh"
 #include "G4ios.hh"
 #include "GasProperties.hh"
@@ -11,13 +12,20 @@ TpcMessenger::TpcMessenger(TpcConfig& config)
     : fConfig(config),
       fMessenger(std::make_unique<G4GenericMessenger>(this, "/tpc/",
                                                       "TPC run settings")) {
+  // PreInit only: the geometry and the step limit are built once, by
+  // /run/initialize, so a later change would only reach the "run" ntuple and
+  // leave the material it describes untouched (TODO/09 R1, R2).
   fMessenger->DeclareMethod("gas", &TpcMessenger::SetGas,
                             "Gas: He, Ar, CO2 or a mixture such as"
-                            " He-90-CO2-10 (before /run/initialize).");
+                            " He-90-CO2-10 (before /run/initialize).")
+      .SetStates(G4State_PreInit);
   fMessenger->DeclareMethod("pressure", &TpcMessenger::SetPressure,
-                            "Gas pressure in mbar (before /run/initialize).");
+                            "Gas pressure in mbar (before /run/initialize).")
+      .SetStates(G4State_PreInit);
   fMessenger->DeclareMethod("hits", &TpcMessenger::SetHits,
-                            "Write the hits ntuple and limit steps to 1 mm.");
+                            "Write the hits ntuple and limit steps to 1 mm"
+                            " (before /run/initialize).")
+      .SetStates(G4State_PreInit);
 }
 
 TpcMessenger::~TpcMessenger() = default;

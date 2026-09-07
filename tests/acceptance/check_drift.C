@@ -62,7 +62,7 @@ void check_drift(const char* fileName, const char* gas, double pressureMbar,
   events->SetBranchAddress("e0", &e0);
 
   TTree* electrons = AtTree(file, "electrons");
-  int eventID = 0, status = 0;
+  int eventID = 0;
   double y0 = 0., t0 = 0., x = 0., y = 0., z = 0., t = 0., weight = 0.;
   electrons->SetBranchAddress("eventID", &eventID);
   electrons->SetBranchAddress("y0", &y0);
@@ -72,7 +72,6 @@ void check_drift(const char* fileName, const char* gas, double pressureMbar,
   electrons->SetBranchAddress("z", &z);
   electrons->SetBranchAddress("t", &t);
   electrons->SetBranchAddress("weight", &weight);
-  electrons->SetBranchAddress("status", &status);
 
   const Long64_t n = electrons->GetEntries();
   AtCheck(n > 0, Form("electrons has %lld entries", n));

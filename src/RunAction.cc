@@ -1,6 +1,5 @@
 #include "RunAction.hh"
 
-#include "DetectorConstruction.hh"
 #include "G4AnalysisManager.hh"
 #include "G4GeneralParticleSource.hh"
 #include "G4SPSEneDistribution.hh"
@@ -20,9 +19,9 @@ bool EndsWithRoot(const G4String& name) {
 
 }  // namespace
 
-RunAction::RunAction(const TpcConfig& config, DetectorConstruction& detector,
+RunAction::RunAction(const TpcConfig& config,
                      PrimaryGeneratorAction& generator)
-    : fConfig(config), fDetector(detector), fGenerator(generator) {
+    : fConfig(config), fGenerator(generator) {
   G4AnalysisManager::Instance()->SetDefaultFileType("root");
 }
 
@@ -89,7 +88,13 @@ void RunAction::WriteRunNtuple() {
 }
 
 void RunAction::BeginOfRunAction(const G4Run*) {
-  fDetector.ApplyStepLimit();
+  if (fNtuplesCreated) {
+    // The second run would reopen the same file with RECREATE and lose the
+    // first one, and its ntuple layout is frozen by the first (TODO/09 R2).
+    G4Exception("RunAction::BeginOfRunAction()", "tpc0003", FatalException,
+                "one /run/beamOn per macro: run the second one from its own"
+                " macro, with its own /tpc settings.");
+  }
 
   auto* analysis = G4AnalysisManager::Instance();
   const G4String currentName = analysis->GetFileName();
@@ -105,10 +110,8 @@ void RunAction::BeginOfRunAction(const G4Run*) {
     // dots of its own); re-set it so the file actually gets written there.
     analysis->SetFileName(currentName + ".root");
   }
-  if (!fNtuplesCreated) {
-    CreateNtuples();
-    fNtuplesCreated = true;
-  }
+  CreateNtuples();
+  fNtuplesCreated = true;
   analysis->OpenFile();
   WriteRunNtuple();
 }

@@ -39,8 +39,6 @@ class Drifter {
   double Dt() const { return m_dt; }                 // sqrt(cm)
   double W() const { return m_medium.GetW(); }       // eV
   double Fano() const { return m_medium.GetFanoFactor(); }
-  bool TableWasGenerated() const { return m_generated; }
-  const std::string& GasFile() const { return m_gasFile; }
 
  private:
   Garfield::MediumMagboltz m_medium;
@@ -49,8 +47,6 @@ class Drifter {
   Garfield::ComponentConstant m_field;
   Garfield::Sensor m_sensor;
   Garfield::AvalancheMC m_avalanche;
-  std::string m_gasFile;
-  bool m_generated = false;
   double m_vdrift = 0.;
   double m_dl = 0.;
   double m_dt = 0.;

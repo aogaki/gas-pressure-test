@@ -27,6 +27,7 @@ void SteppingAction::UserSteppingAction(const G4Step* step) {
   const G4double edep = step->GetTotalEnergyDeposit();
   fEventAction.AddEdep(edep);
 
+  const G4StepPoint* pre = step->GetPreStepPoint();
   const G4StepPoint* post = step->GetPostStepPoint();
   const G4Track* track = step->GetTrack();
 
@@ -35,20 +36,24 @@ void SteppingAction::UserSteppingAction(const G4Step* step) {
     const G4int eventID = G4EventManager::GetEventManager()
                               ->GetConstCurrentEvent()
                               ->GetEventID();
+    // The middle of the step, in space and in time: the ionisation is spread
+    // along the 1 mm step, and the end point would shift the whole charge
+    // distribution by half a step and comb it at the step pitch
+    // (TODO/09 R11).
+    const G4ThreeVector hit =
+        0.5 * (pre->GetPosition() + post->GetPosition());
+    const G4double hitTime =
+        0.5 * (pre->GetGlobalTime() + post->GetGlobalTime());
     analysis->FillNtupleIColumn(ntuple::kHits, ntuple::kHitEventID, eventID);
     analysis->FillNtupleIColumn(ntuple::kHits, ntuple::kHitTrackID,
                                 track->GetTrackID());
     analysis->FillNtupleIColumn(
         ntuple::kHits, ntuple::kHitPdg,
         track->GetParticleDefinition()->GetPDGEncoding());
-    analysis->FillNtupleDColumn(ntuple::kHits, ntuple::kHitX,
-                                post->GetPosition().x() / mm);
-    analysis->FillNtupleDColumn(ntuple::kHits, ntuple::kHitY,
-                                post->GetPosition().y() / mm);
-    analysis->FillNtupleDColumn(ntuple::kHits, ntuple::kHitZ,
-                                post->GetPosition().z() / mm);
-    analysis->FillNtupleDColumn(ntuple::kHits, ntuple::kHitT,
-                                post->GetGlobalTime() / ns);
+    analysis->FillNtupleDColumn(ntuple::kHits, ntuple::kHitX, hit.x() / mm);
+    analysis->FillNtupleDColumn(ntuple::kHits, ntuple::kHitY, hit.y() / mm);
+    analysis->FillNtupleDColumn(ntuple::kHits, ntuple::kHitZ, hit.z() / mm);
+    analysis->FillNtupleDColumn(ntuple::kHits, ntuple::kHitT, hitTime / ns);
     analysis->FillNtupleDColumn(ntuple::kHits, ntuple::kHitEdep, edep / MeV);
     analysis->FillNtupleDColumn(ntuple::kHits, ntuple::kHitStepLength,
                                 step->GetStepLength() / mm);

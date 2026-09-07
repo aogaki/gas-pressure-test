@@ -3,16 +3,14 @@
 #include "G4String.hh"
 #include "G4UserRunAction.hh"
 
-class DetectorConstruction;
 class PrimaryGeneratorAction;
 struct TpcConfig;
 
-// Opens the ROOT output, books the ntuples and applies the step limit that
-// matches the current /tpc/hits setting.
+// Opens the ROOT output and books the ntuples. Only one run per macro is
+// allowed; a second /run/beamOn stops with a FatalException.
 class RunAction : public G4UserRunAction {
  public:
-  RunAction(const TpcConfig& config, DetectorConstruction& detector,
-            PrimaryGeneratorAction& generator);
+  RunAction(const TpcConfig& config, PrimaryGeneratorAction& generator);
 
   void BeginOfRunAction(const G4Run* run) override;
   void EndOfRunAction(const G4Run* run) override;
@@ -25,8 +23,8 @@ class RunAction : public G4UserRunAction {
   void WriteRunNtuple();
 
   const TpcConfig& fConfig;
-  DetectorConstruction& fDetector;
   PrimaryGeneratorAction& fGenerator;
+  // True once the first run has booked the ntuples: a second run is refused.
   G4bool fNtuplesCreated = false;
   // Set by CreateNtuples() to the id CreateNtuple("run", ...) returned: it
   // shifts by one when /tpc/hits adds the "hits" ntuple before it.

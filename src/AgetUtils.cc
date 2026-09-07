@@ -2,45 +2,16 @@
 
 #include <unistd.h>
 
-#include <cstdlib>
+#include "CliUtils.hh"
 
 namespace {
 
 constexpr const char* kRootSuffix = ".root";
 constexpr const char* kReadoutSuffix = "_readout";
 
-// getopt() keeps state between calls, which the unit tests exercise.
-void ResetGetopt() {
-#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || \
-    defined(__NetBSD__)
-  optreset = 1;
-  optind = 1;
-#else
-  optind = 0;
-#endif
-}
-
-// strtod() with a "the whole argument was a number" check.
-bool ToDouble(const char* text, double& value) {
-  char* end = nullptr;
-  value = std::strtod(text, &end);
-  return end != text && *end == '\0';
-}
-
-bool ToLong(const char* text, long& value) {
-  char* end = nullptr;
-  value = std::strtol(text, &end, 10);
-  return end != text && *end == '\0';
-}
-
 // A positive number, for the options that have no meaning at zero.
 bool ToPositive(const char* text, double& value) {
   return ToDouble(text, value) && value > 0.;
-}
-
-bool EndsWith(const std::string& text, const std::string& suffix) {
-  return text.size() >= suffix.size() &&
-         text.compare(text.size() - suffix.size(), suffix.size(), suffix) == 0;
 }
 
 }  // namespace

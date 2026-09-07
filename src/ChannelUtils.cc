@@ -3,35 +3,12 @@
 #include <unistd.h>
 
 #include <cmath>
-#include <cstdlib>
+
+#include "CliUtils.hh"
 
 namespace {
 
 constexpr const char* kRootSuffix = ".root";
-
-// getopt() keeps state between calls, which the unit tests exercise.
-void ResetGetopt() {
-#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || \
-    defined(__NetBSD__)
-  optreset = 1;
-  optind = 1;
-#else
-  optind = 0;
-#endif
-}
-
-// strtod() with a "the whole argument was a number" check.
-bool ToDouble(const char* text, double& value) {
-  char* end = nullptr;
-  value = std::strtod(text, &end);
-  return end != text && *end == '\0';
-}
-
-bool ToLong(const char* text, long& value) {
-  char* end = nullptr;
-  value = std::strtol(text, &end, 10);
-  return end != text && *end == '\0';
-}
 
 }  // namespace
 
@@ -92,10 +69,8 @@ bool ParseChannelOptions(int argc, char* const argv[], ChannelOptions& options,
 
 std::string ChannelOutputName(const std::string& input) {
   std::string stem = input;
-  const std::size_t suffix = std::string(kRootSuffix).size();
-  if (stem.size() >= suffix &&
-      stem.compare(stem.size() - suffix, suffix, kRootSuffix) == 0) {
-    stem.erase(stem.size() - suffix);
+  if (EndsWith(stem, kRootSuffix)) {
+    stem.erase(stem.size() - std::string(kRootSuffix).size());
   }
   return stem + "_readout" + kRootSuffix;
 }

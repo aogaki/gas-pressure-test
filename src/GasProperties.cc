@@ -1,5 +1,6 @@
 #include "GasProperties.hh"
 
+#include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <cstdio>
@@ -82,11 +83,19 @@ std::vector<GasComponent> ParseGasSpec(const std::string& spec) {
   }
 
   double sum = 0.;
+  std::vector<std::string> seen;
   for (const GasComponent& component : components) {
     FindGas(component.name);  // Validates the name.
     if (!(component.fraction > 0.)) {
       throw std::invalid_argument("percentages must be positive: " + spec);
     }
+    // Magboltz takes each gas once, and the name is a file name as well, so
+    // "He-50-Ar-40-He-10" has to be written as "He-60-Ar-40".
+    if (std::find(seen.begin(), seen.end(), component.name) != seen.end()) {
+      throw std::invalid_argument("component '" + component.name +
+                                  "' appears twice: " + spec);
+    }
+    seen.push_back(component.name);
     sum += component.fraction;
   }
   if (std::fabs(sum - 100.) > 1e-6) {

@@ -350,19 +350,23 @@ set_tests_properties(AT-D1_check PROPERTIES LABELS acceptance DEPENDS AT-D1_run)
 set(DRIFT_SCAN_SH ${PROJECT_SOURCE_DIR}/scripts/drift_scan.sh)
 
 # Dry run: one command per (Stage 1 file, voltage), and nothing is executed.
-# The Stage 2 output of the run below is skipped because its name ends in "V".
+# The Stage 2 output of the run below is skipped because its name ends in "V",
+# the Stage 3 output because it ends in "_readout".
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/atD2_dry)
 add_test(NAME AT-D2_dry
          COMMAND sh -c [=[
 set -e
 rm -f ./*.root
-touch Ar_200mbar_5.5MeV.root Ar_200mbar_5.5MeV_1000V.root
+touch Ar_200mbar_5.5MeV.root Ar_200mbar_5.5MeV_1000V.root \
+      Ar_200mbar_5.5MeV_1000V_readout.root
 out=$("$0" -d -o . -v "1000 2000" -x /no/such/exe 2>&1 >/dev/null)
 printf '%s\n' "$out"
-# One "(cd . && ..." line per (Stage 1 file, voltage); the _1000V.root file
-# is a Stage 2 output and must not be picked up again.
+# One "(cd . && ..." line per (Stage 1 file, voltage); the _1000V.root file is
+# a Stage 2 output and the _readout.root file a Stage 3 one, so neither may be
+# picked up again.
 test "$(printf '%s\n' "$out" | grep -c '^(cd ')" = 2
 test "$(printf '%s\n' "$out" | grep -c -- '-v 2000')" = 1
+test "$(printf '%s\n' "$out" | grep -c -- 'readout')" = 0
 test ! -f Ar_200mbar_5.5MeV_2000V.root
 ]=]
                  ${DRIFT_SCAN_SH}
@@ -384,3 +388,79 @@ add_test(NAME AT-D2_log
          COMMAND sh -c [=[test -s logs/Ar_200mbar_5.5MeV_2000V.log]=]
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/atD2)
 set_tests_properties(AT-D2_log PROPERTIES LABELS acceptance DEPENDS AT-D2_run)
+
+# ============================================================================
+# Stage 3: channel-response (TODO/06)
+# ============================================================================
+
+set(PADS_CSV ${PROJECT_SOURCE_DIR}/geometry/pads.csv)
+
+# --- AT3-1 CLI --------------------------------------------------------------
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s3_cli)
+add_test(NAME AT3-1_no_input
+         COMMAND sh -c [=[! "$0" -p "$1"]=]
+                 $<TARGET_FILE:channel-response> ${PADS_CSV}
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s3_cli)
+add_test(NAME AT3-1_no_pads
+         COMMAND sh -c [=[! "$0" -i in.root]=] $<TARGET_FILE:channel-response>
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s3_cli)
+set_tests_properties(AT3-1_no_input AT3-1_no_pads PROPERTIES LABELS acceptance)
+
+# A Stage 1 output has no "electrons" ntuple, so Stage 3 has to refuse it.
+acceptance_run(AT3-1_stage1only_run s3_noelectrons drift_stage1.mac)
+add_test(NAME AT3-1_no_electrons
+         COMMAND sh -c
+                 [=[! "$0" -i Ar_200mbar_5.5MeV.root -p "$1" && test -z "$(ls *_readout.root 2>/dev/null)"]=]
+                 $<TARGET_FILE:channel-response> ${PADS_CSV}
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s3_noelectrons)
+set_tests_properties(AT3-1_no_electrons PROPERTIES LABELS acceptance
+                     DEPENDS AT3-1_stage1only_run)
+
+# --- AT3-3 end to end: Stage 1 -> Stage 2 -> Stage 3 ------------------------
+# He at 200 mbar, 0.3 MeV. Its Magboltz table (100 V/cm) is a new one, so this
+# run has to wait for AT2-4, which empties the shared cache directory.
+acceptance_run(AT3-3_stage1 s3_end2end at3_stage1.mac)
+
+add_test(NAME AT3-3_stage2
+         COMMAND $<TARGET_FILE:drift-electrons>
+                 -i He_200mbar_0.3MeV.root -v 2000 -f 0.1 -c ${S2_CACHE}
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s3_end2end)
+set_tests_properties(AT3-3_stage2 PROPERTIES LABELS acceptance
+                     DEPENDS "AT3-3_stage1;AT2-4_cache" TIMEOUT 900)
+
+add_test(NAME AT3-3_run
+         COMMAND $<TARGET_FILE:channel-response>
+                 -i He_200mbar_0.3MeV_2000V.root -p ${PADS_CSV} -w 0
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s3_end2end)
+set_tests_properties(AT3-3_run PROPERTIES LABELS acceptance
+                     DEPENDS AT3-3_stage2)
+
+# The alpha stops about 74 mm into the gas, so the pads that see electrons lie
+# between the entrance plane (z = -250 mm) and the end of the track. The range
+# straggles (the ten alphas stop between z = -183 and z = -167 mm), and on top
+# of that comes three sigma of transverse diffusion (4 mm): -167 + 12 = -155.
+set(AT3_3_CALL "check_readout.C(\"He_200mbar_0.3MeV_2000V_readout.root\",\"He_200mbar_0.3MeV_2000V.root\",\"${PADS_CSV}\",\"He\",200,2000,10,0,0.9,0.99,0.99,-250,-155)")
+acceptance_check(AT3-3_check s3_end2end AT3-3_run "${AT3_3_CALL}")
+
+add_test(NAME AT3-1_output_name
+         COMMAND sh -c [=[test -f He_200mbar_0.3MeV_2000V_readout.root]=]
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s3_end2end)
+set_tests_properties(AT3-1_output_name PROPERTIES LABELS acceptance
+                     DEPENDS AT3-3_run)
+
+# --- AT3-4 a window that opens after the last electron ----------------------
+# The output name is the one of AT3-3, so this runs on a copy of the Stage 2
+# file in its own directory and the two stay independent.
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s3_window)
+add_test(NAME AT3-4_run
+         COMMAND sh -c [=[
+set -e
+cp ../s3_end2end/He_200mbar_0.3MeV_2000V.root .
+"$0" -i He_200mbar_0.3MeV_2000V.root -p "$1" -w 30
+]=]
+                 $<TARGET_FILE:channel-response> ${PADS_CSV}
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/s3_window)
+set_tests_properties(AT3-4_run PROPERTIES LABELS acceptance
+                     DEPENDS AT3-3_stage2)
+acceptance_check(AT3-4_check s3_window AT3-4_run
+                 [[check_readout_empty.C("He_200mbar_0.3MeV_2000V_readout.root",10,30)]])

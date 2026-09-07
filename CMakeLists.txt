@@ -54,6 +54,14 @@ target_link_libraries(drift_core PUBLIC drift_util Garfield::Garfield)
 add_executable(drift-electrons src/drift_main.cc)
 target_link_libraries(drift-electrons PRIVATE drift_core ROOT::RIO ROOT::Tree)
 
+# --- Stage 3: channel-response (ROOT only, no Geant4 and no Garfield++) -----
+# The pad map and the pure helpers, so that the unit tests need no ROOT.
+add_library(readout_util STATIC src/ChannelUtils.cc)
+target_include_directories(readout_util PUBLIC ${PROJECT_SOURCE_DIR}/include)
+
+add_executable(channel-response src/channel_main.cc)
+target_link_libraries(channel-response PRIVATE readout_util ROOT::RIO ROOT::Tree)
+
 enable_testing()
 add_subdirectory(tests/unit)
 add_subdirectory(tests/acceptance)

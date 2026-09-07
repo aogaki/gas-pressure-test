@@ -9,7 +9,8 @@
 namespace {
 const char* kHeader =
     "gas,pressure_mbar,energy_MeV,events,mean_trackLength_mm,"
-    "sigma_trackLength_mm,mean_projected_mm,exited_fraction,mean_eExit_MeV";
+    "sigma_trackLength_mm,mean_projected_mm,exited_fraction,mean_eExit_MeV,"
+    "contained_fraction";
 }  // namespace
 
 // AT-S3: range_summary.C's CSV for two energies of the same gas/pressure.
@@ -40,17 +41,19 @@ void check_scan_summary(const char* csvFileName) {
   const double expectedEnergy[2] = {0.3, 1.0};
   for (size_t i = 0; i < rows.size() && i < 2; ++i) {
     std::stringstream ss(rows[i]);
-    std::string gas, pressureStr, energyStr, eventsStr, meanTrackStr;
-    std::getline(ss, gas, ',');
-    std::getline(ss, pressureStr, ',');
-    std::getline(ss, energyStr, ',');
-    std::getline(ss, eventsStr, ',');
-    std::getline(ss, meanTrackStr, ',');
-    AtCheckNear(std::atof(energyStr.c_str()), expectedEnergy[i], 1e-6,
+    std::vector<std::string> fields;
+    std::string field;
+    while (std::getline(ss, field, ',')) fields.push_back(field);
+    AtCheck(fields.size() == 10,
+            Form("row %zu has %zu columns (expected 10)", i, fields.size()));
+    if (fields.size() != 10) continue;
+    AtCheckNear(std::atof(fields[2].c_str()), expectedEnergy[i], 1e-6,
                 Form("row %zu energy_MeV", i));
-    AtCheck(std::atoi(eventsStr.c_str()) == 10, Form("row %zu events == 10", i));
-    AtCheck(std::atof(meanTrackStr.c_str()) > 0.,
+    AtCheck(std::atoi(fields[3].c_str()) == 10, Form("row %zu events == 10", i));
+    AtCheck(std::atof(fields[4].c_str()) > 0.,
             Form("row %zu mean_trackLength_mm > 0", i));
+    AtCheckRange(std::atof(fields[9].c_str()), 0., 1.,
+                 Form("row %zu contained_fraction", i));
   }
   AtReport();
 }

@@ -2,6 +2,12 @@
 // See TODO/04_scan.md.
 //
 // Usage: root -l -b -q 'scripts/range_summary.C("<outdir>")'
+//        root -l -b -q 'scripts/range_summary.C("<outdir>",-143.9,53.75)'
+//
+// contained_fraction counts the events that stop inside a detection area
+// reaching to zMaxMm along the alpha-source axis and to +-xMaxMm across it.
+// The default is the whole gas volume; for the readout board of TODO/06 use
+// zMaxMm = -143.9 and xMaxMm = 53.75.
 //
 // NOTE: mean_trackLength_mm and mean_projected_mm include punch-through
 // events (exited == 1). For a row with exited_fraction > 0 those means are
@@ -31,11 +37,12 @@ struct Row {
   double meanProj = 0.;
   double exitedFraction = 0.;
   double meanEExit = 0.;
+  double containedFraction = 0.;
 };
 
 // Reads one Stage 1 ROOT file and fills row. Returns false (with a message
 // on stderr) if the file cannot be used.
-bool ReadFile(const char* path, Row& row) {
+bool ReadFile(const char* path, Row& row, double zMaxMm, double xMaxMm) {
   TFile* file = TFile::Open(path);
   if (file == nullptr || file->IsZombie()) {
     std::fprintf(stderr, "range_summary: cannot open %s\n", path);
@@ -55,18 +62,19 @@ bool ReadFile(const char* path, Row& row) {
   run->SetBranchAddress("pressure", &pressure);
   run->GetEntry(0);
 
-  double e0 = 0., z0 = 0., trackLength = 0., zEnd = 0., eExit = 0.;
+  double e0 = 0., z0 = 0., trackLength = 0., xEnd = 0., zEnd = 0., eExit = 0.;
   int exited = 0;
   events->SetBranchAddress("e0", &e0);
   events->SetBranchAddress("z0", &z0);
   events->SetBranchAddress("trackLength", &trackLength);
+  events->SetBranchAddress("xEnd", &xEnd);
   events->SetBranchAddress("zEnd", &zEnd);
   events->SetBranchAddress("eExit", &eExit);
   events->SetBranchAddress("exited", &exited);
 
   const Long64_t n = events->GetEntries();
   double sumE0 = 0., sumTrack = 0., sumTrack2 = 0., sumProj = 0., sumEExit = 0.;
-  Long64_t exitedCount = 0;
+  Long64_t exitedCount = 0, containedCount = 0;
   for (Long64_t i = 0; i < n; ++i) {
     events->GetEntry(i);
     sumE0 += e0;
@@ -75,6 +83,9 @@ bool ReadFile(const char* path, Row& row) {
     sumProj += zEnd - z0;
     sumEExit += eExit;
     if (exited != 0) ++exitedCount;
+    if (exited == 0 && zEnd <= zMaxMm && std::fabs(xEnd) <= xMaxMm) {
+      ++containedCount;
+    }
   }
 
   row.gas = gas;
@@ -88,6 +99,7 @@ bool ReadFile(const char* path, Row& row) {
     row.meanProj = sumProj / n;
     row.exitedFraction = static_cast<double>(exitedCount) / n;
     row.meanEExit = sumEExit / n;
+    row.containedFraction = static_cast<double>(containedCount) / n;
   }
   delete file;
   return true;
@@ -95,7 +107,8 @@ bool ReadFile(const char* path, Row& row) {
 
 }  // namespace
 
-void range_summary(const char* outdir) {
+void range_summary(const char* outdir, double zMaxMm = 250.,
+                   double xMaxMm = 100.) {
   std::vector<Row> rows;
   void* dirp = gSystem->OpenDirectory(outdir);
   if (dirp == nullptr) {
@@ -107,7 +120,8 @@ void range_summary(const char* outdir) {
     const TString name(entry);
     if (!name.EndsWith(".root")) continue;
     Row row;
-    if (ReadFile(TString::Format("%s/%s", outdir, name.Data()), row)) {
+    if (ReadFile(TString::Format("%s/%s", outdir, name.Data()), row, zMaxMm,
+                 xMaxMm)) {
       rows.push_back(row);
     }
   }
@@ -122,11 +136,11 @@ void range_summary(const char* outdir) {
   std::printf(
       "gas,pressure_mbar,energy_MeV,events,mean_trackLength_mm,"
       "sigma_trackLength_mm,mean_projected_mm,exited_fraction,"
-      "mean_eExit_MeV\n");
+      "mean_eExit_MeV,contained_fraction\n");
   for (const Row& row : rows) {
-    std::printf("%s,%g,%g,%lld,%g,%g,%g,%g,%g\n", row.gas.c_str(),
+    std::printf("%s,%g,%g,%lld,%g,%g,%g,%g,%g,%g\n", row.gas.c_str(),
                 row.pressure, row.energy, row.events, row.meanTrack,
                 row.sigmaTrack, row.meanProj, row.exitedFraction,
-                row.meanEExit);
+                row.meanEExit, row.containedFraction);
   }
 }

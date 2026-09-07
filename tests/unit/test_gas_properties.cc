@@ -104,11 +104,16 @@ TEST(ParseGasSpecTest, MalformedSpecificationsThrow) {
 }
 
 TEST(ParseGasSpecTest, MoreThanSixComponentsThrow) {
-  // Magboltz takes at most six gases.
-  EXPECT_NO_THROW(
-      ParseGasSpec("He-50-Ar-10-CO2-10-He-10-Ar-10-CO2-10"));
+  // Magboltz takes at most six gases. Only three names are known, so a
+  // specification that long always repeats one, which is refused as well.
   EXPECT_THROW(ParseGasSpec("He-50-Ar-10-CO2-10-He-10-Ar-10-CO2-5-He-5"),
                std::invalid_argument);
+}
+
+TEST(ParseGasSpecTest, RepeatedComponentThrows) {
+  EXPECT_THROW(ParseGasSpec("He-50-Ar-40-He-10"), std::invalid_argument);
+  EXPECT_THROW(ParseGasSpec("CO2-50-CO2-50"), std::invalid_argument);
+  EXPECT_NO_THROW(ParseGasSpec("He-50-Ar-40-CO2-10"));
 }
 
 TEST(GasDensityTest, MixtureIsThePartialPressureSum) {

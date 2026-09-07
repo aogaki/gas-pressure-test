@@ -53,9 +53,9 @@ mkdir -p "$outdir/logs"
 rm -f "$outdir/.failed"
 
 # The inputs are the ROOT files of Stage 1, that is every *.root of outdir
-# except the outputs of Stage 2, whose names end in "_{V}V.root" (a digit in
-# front of the V, so that the "MeV" of a Stage 1 name is not mistaken for
-# one). In normal mode
+# except the outputs of the later stages: Stage 2 writes "_{V}V.root" (a digit
+# in front of the V, so that the "MeV" of a Stage 1 name is not mistaken for
+# one) and Stage 3 writes "_readout.root". In normal mode
 # each (input, voltage) pair is printed to stdout, building the run list
 # consumed by xargs below; in dry-run mode the would-be command goes to
 # stderr instead so stdout is not mixed into the run list.
@@ -63,7 +63,7 @@ runlist=$(
   for file in "$outdir"/*.root; do
     [ -e "$file" ] || continue
     name=$(basename "$file" .root)
-    case $name in (*[0-9]V) continue ;; esac
+    case $name in (*[0-9]V | *_readout) continue ;; esac
     for v in $voltages; do
       if [ "$dry_run" -eq 1 ]; then
         echo "(cd $outdir && $exe -i $name.root -v $v -f $fraction" \

@@ -18,3 +18,12 @@ target_link_libraries(drift_unit_tests PRIVATE drift_util GTest::gtest_main)
 
 add_test(NAME drift_unit COMMAND drift_unit_tests)
 set_tests_properties(drift_unit PROPERTIES LABELS unit)
+
+# Stage 3: the pad map and the pure helpers, free of ROOT as well.
+add_executable(readout_unit_tests test_readout_utils.cc)
+target_link_libraries(readout_unit_tests PRIVATE readout_util GTest::gtest_main)
+target_compile_definitions(readout_unit_tests PRIVATE
+  PADS_CSV_PATH="${PROJECT_SOURCE_DIR}/geometry/pads.csv")
+
+add_test(NAME readout_unit COMMAND readout_unit_tests)
+set_tests_properties(readout_unit PROPERTIES LABELS unit)

@@ -1,6 +1,6 @@
 # 06 Stage 3: パッド・ストリップ・チャンネルへの振り分けと時間ビン化
 
-前提: TODO/01〜05。状態: 設計 (2026-09-07)。pads.csv を受け取り済み。混合ガス (TODO/05) の後に発注する。
+前提: TODO/01〜05。状態: 発注 (2026-09-07)。pads.csv を受け取り済み。
 
 ## 読み出し板の実態 (2026-09-07 に確定)
 
@@ -122,7 +122,8 @@ Stage 1 (He 200 mbar 0.3 MeV, hits true, 10 イベント) → Stage 2 (`-v 2000 
 3. 本体: 入力読み込み → 振り分け → `waveforms`, `summary`, `run`, `events`
 4. AT3-1, AT3-3, AT3-4
 5. range_summary.C の contained_fraction
-6. TODO/01 の座標系の説明に α 線源軸の注記を追加
+6. (済) TODO/01 の座標系の説明に α 線源軸の注記を追加
+7. 小さな修正 2 つ: `ParseGasSpec` が成分名の重複 (`He-50-Ar-40-He-10`) を `std::invalid_argument` で弾く (単体テスト追加)。`scripts/drift_scan.sh` が `*_readout.root` を入力から除外する (AT-D2 の dry run に readout ファイルを置いて確認)
 
 ## Magboltz 検算 (CO2 100 %, 100 mbar, 293.15 K)
 

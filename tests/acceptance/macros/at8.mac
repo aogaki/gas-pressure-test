@@ -1,0 +1,7 @@
+# AT-8: timing, Ar at 1013.25 mbar with hits
+/tpc/gas Ar
+/tpc/pressure 1013.25
+/tpc/hits true
+/run/initialize
+/random/setSeeds 1 1
+/run/beamOn 1000

@@ -1,0 +1,7 @@
+# AT-2: Ar at 1013.25 mbar, 5.5 MeV
+/tpc/gas Ar
+/tpc/pressure 1013.25
+/tpc/hits false
+/run/initialize
+/random/setSeeds 1 1
+/run/beamOn 1000

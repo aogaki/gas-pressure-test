@@ -1,0 +1,7 @@
+# AT-3: CO2 at 200 mbar, 5.5 MeV
+/tpc/gas CO2
+/tpc/pressure 200
+/tpc/hits false
+/run/initialize
+/random/setSeeds 1 1
+/run/beamOn 1000

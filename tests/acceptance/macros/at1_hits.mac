@@ -1,0 +1,7 @@
+# AT-1: same as at1_default but with the hits ntuple
+/tpc/gas Ar
+/tpc/pressure 200
+/tpc/hits true
+/run/initialize
+/random/setSeeds 1 1
+/run/beamOn 10

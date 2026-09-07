@@ -1,0 +1,8 @@
+# AT-10: Ar at 200 mbar with hits false
+/tpc/gas Ar
+/tpc/pressure 200
+/tpc/hits false
+/run/initialize
+/analysis/setFileName at10_false.root
+/random/setSeeds 1 1
+/run/beamOn 1000

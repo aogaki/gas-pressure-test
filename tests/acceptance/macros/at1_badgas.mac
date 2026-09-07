@@ -1,0 +1,5 @@
+# AT-1: unknown gas, must abort
+/tpc/gas Xe
+/tpc/pressure 200
+/run/initialize
+/run/beamOn 10

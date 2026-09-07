@@ -1,0 +1,8 @@
+# AT-7: reproducibility, run 2 of the identical pair
+/tpc/gas Ar
+/tpc/pressure 200
+/tpc/hits false
+/run/initialize
+/analysis/setFileName at7_run2.root
+/random/setSeeds 1 1
+/run/beamOn 1000

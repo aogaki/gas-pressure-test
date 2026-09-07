@@ -1,0 +1,7 @@
+# AT-9: hit sanity, Ar at 200 mbar with hits
+/tpc/gas Ar
+/tpc/pressure 200
+/tpc/hits true
+/run/initialize
+/random/setSeeds 1 1
+/run/beamOn 1000

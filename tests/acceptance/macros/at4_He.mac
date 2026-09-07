@@ -1,0 +1,8 @@
+# AT-4: He at 200 mbar, 0.3 MeV
+/tpc/gas He
+/tpc/pressure 200
+/tpc/hits false
+/run/initialize
+/gps/energy 0.3 MeV
+/random/setSeeds 1 1
+/run/beamOn 1000

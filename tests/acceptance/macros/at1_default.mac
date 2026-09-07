@@ -1,0 +1,7 @@
+# AT-1: default GPS, automatic file name Ar_200mbar_5.5MeV.root
+/tpc/gas Ar
+/tpc/pressure 200
+/tpc/hits false
+/run/initialize
+/random/setSeeds 1 1
+/run/beamOn 10

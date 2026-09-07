@@ -1,0 +1,12 @@
+# AT-11: flat energy spectrum, automatic file name Ar_200mbar_Lin.root
+/tpc/gas Ar
+/tpc/pressure 200
+/tpc/hits false
+/run/initialize
+/gps/ene/type Lin
+/gps/ene/min 1 MeV
+/gps/ene/max 6 MeV
+/gps/ene/gradient 0
+/gps/ene/intercept 1
+/random/setSeeds 1 1
+/run/beamOn 100

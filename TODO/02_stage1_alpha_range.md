@@ -114,7 +114,9 @@ He, Ar, CO2 で
 ### AT-11 GPS の分布が記録されること (Ar, 200 mbar, 100 イベント)
 
 - `/gps/ene/type Lin`, `/gps/ene/min 1 MeV`, `/gps/ene/max 6 MeV`, `/gps/ene/gradient 0`, `/gps/ene/intercept 1` → e0 の最小が 1 MeV 以上、最大が 6 MeV 以下、標準偏差が 1 MeV 以上。自動命名は `Ar_200mbar_Lin.root`
-- `/gps/ang/type iso` に `/gps/ang/mintheta 170 deg`, `/gps/ang/maxtheta 180 deg` (GPS の iso は -方向 を向くので +z 側に出すには theta を 180 deg 付近にする。実装時に符号を確認して記述を直す) → dz0 が 0.98 以上、dx0 の標準偏差が 0 より大きい
+- `/gps/ang/type iso` に `/gps/ang/mintheta 170 deg`, `/gps/ang/maxtheta 180 deg` → dz0 が 0.98 以上、dx0 の標準偏差が 0 より大きい
+  - 符号は実測で確認した。GPS の iso が作る運動量は theta の逆向きで、theta = 0 deg なら dz0 = -1、theta = 180 deg なら dz0 = +1 になる。したがって +z に飛ばすには theta を 180 deg 付近にする
+  - theta 170-180 deg のとき dz0 は cos(10 deg) = 0.9848 以上。実測は 0.9849 から 0.9999
 
 ## 単体テスト (GoogleTest, `tests/unit/`)
 
@@ -140,7 +142,18 @@ He, Ar, CO2 で
 
 ## 計測結果
 
-(実装後に記入)
+2026-09-07、Apple Silicon (Darwin 25.6.0)、Apple clang、`CMAKE_BUILD_TYPE=Release` (-O3)、
+Serial run manager。Ar 200 mbar、5.5 MeV、10000 イベント、`/random/setSeeds 1 1`。
+実時間はプロセス全体 (初期化は約 0.4 s)。
+
+| `/tpc/hits` | 実時間 [s] | イベント/秒 | 出力 [MB] | 1 イベントあたり |
+|---|---|---|---|---|
+| false | 20.5 | 488 | 0.66 | 66 B |
+| true | 61.7 | 162 | 1826 | 183 kB |
+
+- hits true の 1 イベントあたりのヒット数は約 3200 行 (α 本体の 1 mm 刻み + δ 線)
+- 1M イベントに外挿すると hits false で約 34 分・66 MB、hits true で約 1.7 時間・183 GB
+- 受け入れテストの `build/tests/acceptance/` は hits true の 3 ラン (各 1000 イベント) で約 600 MB を使う
 
 ## エネルギースキャンの計画 (要相談)
 

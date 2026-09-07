@@ -1,0 +1,8 @@
+# AT-1: explicit output name
+/tpc/gas Ar
+/tpc/pressure 200
+/tpc/hits false
+/run/initialize
+/analysis/setFileName custom
+/random/setSeeds 1 1
+/run/beamOn 10

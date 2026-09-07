@@ -1,0 +1,8 @@
+# AT-7: different seeds
+/tpc/gas Ar
+/tpc/pressure 200
+/tpc/hits false
+/run/initialize
+/analysis/setFileName at7_run3.root
+/random/setSeeds 2 2
+/run/beamOn 1000

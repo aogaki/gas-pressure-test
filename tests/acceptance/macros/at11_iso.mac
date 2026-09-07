@@ -1,0 +1,11 @@
+# AT-11: isotropic direction around +z. GPS iso points along -theta, so a
+# theta close to 180 deg is what leaves the source along +z.
+/tpc/gas Ar
+/tpc/pressure 200
+/tpc/hits false
+/run/initialize
+/gps/ang/type iso
+/gps/ang/mintheta 170 deg
+/gps/ang/maxtheta 180 deg
+/random/setSeeds 1 1
+/run/beamOn 100

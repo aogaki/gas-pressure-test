@@ -1,0 +1,5 @@
+# AT-1: non positive pressure, must abort
+/tpc/gas Ar
+/tpc/pressure 0
+/run/initialize
+/run/beamOn 10
